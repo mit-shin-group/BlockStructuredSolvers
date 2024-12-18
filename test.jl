@@ -4,8 +4,8 @@ import Pkg
 include("TriDiagBlock.jl")
 import .TriDiagBlock: TriDiagBlockData, ThomasSolve, ThomasFactorize
 
-N = 100
-n = 8
+N = 95 # number of diagonal blocks
+n = 8 # size of each block
 
 A_list = zeros(N, 8, 8)
 
@@ -19,7 +19,6 @@ for i = 1:N
     # A_list[i, :, :] = [Q R A'; R' S B'; A B zeros(3, 3)]
     temp = rand(Float64, 8, 8)
     A_list[i, :, :] = temp * temp'
-    # A_list[i, :, :] = Diagonal(ones(8))
 
 end
 
@@ -49,25 +48,25 @@ end
 
 d_list[N, :] = B_list[N-1, :, :]' * xtrue_list[N-1, :] + A_list[N, :, :] * xtrue_list[N, :]
 
-Coeff = zeros(800, 800)
+# Coeff = zeros(800, 800)
 
-Coeff[1:8, 1:8] = A_list[1, :, :]
-Coeff[1:8, 9:16] = B_list[1, :, :]
-for j = 2:N-1
-    Coeff[8*(j-1)+1:8*j, 8*j+1:8*(j+1)] = B_list[j, :, :]
-    Coeff[8*(j-1)+1:8*j, 8*(j-2)+1:8*(j-1)] = B_list[j-1, :, :]'
-    Coeff[8*(j-1)+1:8*j, 8*(j-1)+1:8*j] = A_list[j, :, :]
-end
-Coeff[end-7:end, end-7:end] = A_list[N, :, :]
-Coeff[end-7:end, end-15:end-8] = B_list[N-1, :, :]'
+# Coeff[1:8, 1:8] = A_list[1, :, :]
+# Coeff[1:8, 9:16] = B_list[1, :, :]
+# for j = 2:N-1
+#     Coeff[8*(j-1)+1:8*j, 8*j+1:8*(j+1)] = B_list[j, :, :]
+#     Coeff[8*(j-1)+1:8*j, 8*(j-2)+1:8*(j-1)] = B_list[j-1, :, :]'
+#     Coeff[8*(j-1)+1:8*j, 8*(j-1)+1:8*j] = A_list[j, :, :]
+# end
+# Coeff[end-7:end, end-7:end] = A_list[N, :, :]
+# Coeff[end-7:end, end-15:end-8] = B_list[N-1, :, :]'
 
 
-RHS = zeros(800)
-for j=1:N
-    RHS[8*(j-1)+1:8*j] = d_list[j, :]
-end
+# RHS = zeros(800)
+# for j=1:N
+#     RHS[8*(j-1)+1:8*j] = d_list[j, :]
+# end
 
-sol1 = Coeff \ RHS
+# sol1 = Coeff \ RHS
 
 temp_list = zeros(N, n, n)
 
