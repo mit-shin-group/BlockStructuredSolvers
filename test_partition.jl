@@ -43,11 +43,6 @@ temp_list = zeros(N, n, n)
 
 data = TriDiagBlockData(N, A_list, B_list, temp_list)
 
-
-
-v = zeros((N-P) * n)
-u = zeros(P * n)
-
 I_separator = []
 
 for j = 1:P
@@ -99,3 +94,50 @@ for j = 1:P
 end
 
 ##################
+v = zeros((N-P) * n)
+
+for i = 1:m
+    v[(i-1)*n+1:i*n] = d_list[i, :]
+end
+
+for j = 1:P
+
+    for i = 1:m
+        v[j*m*n+(i-1)*n+1:j*m*n+i*n] = d_list[I_separator[j]+i, :]
+    end
+
+end
+
+
+####################################
+u = zeros(P * n)
+
+for j = 1:P
+
+    u[(j-1)*n+1:j*n] = d_list[I_separator[j], :]
+
+end
+
+
+######
+x_separator_sol = inv(MD - MB' * inv(MA) * MB) * (u - MB' * inv(MA) * v)
+
+xseparator_list = reshape(x_separator_sol, n, P)'
+######
+
+
+d_list[I_separator[1]-1, :] -= B_list[I_separator[1]-1, :, :] * xseparator_list[1, :]
+for j = 2:P
+    d_list[I_separator[j-1]+1, :] -= B_list[I_separator[j-1], :, :]' * xseparator_list[j-1, :]
+    d_list[I_separator[j]-1, :] -= B_list[I_separator[j]-1, :, :] * xseparator_list[j, :]
+end
+d_list[I_separator[P]+1, :] -= B_list[I_separator[P], :, :]' * xseparator_list[P, :]
+
+
+x_list = zeros(m, n)
+
+data = TriDiagBlockData(m, A_list[1:m, :, :], B_list[1:m-1, :, :], zeros(m, n, n))
+
+ThomasFactorize(data)
+
+ThomasSolve(data, d_list[1:m, :], x_list)
