@@ -108,18 +108,76 @@ for j = 1:P-1
 end
 
 ##########################
-x_temp_list = zeros(m, n)
+# x_temp_list = zeros(m, n)
+
+# for j = 1:P-1
+
+#     data = TriDiagBlockData(m, A_list[I_separator[j]+1:I_separator[j+1]-1, :, :], B_list[I_separator[j]+1:I_separator[j+1]-1-1, :, :],  zeros(m, n, n))
+
+#     ThomasFactorize(data)
+
+#     ThomasSolve(data, d_list[I_separator[j]+1:I_separator[j+1]-1, :], x_temp_list)
+#     x_list[I_separator[j]+1:I_separator[j+1]-1, :] = x_temp_list
+
+# end
+
+# x_list - xtrue_list
+
+batch_A_list = zeros(P-1, m, n, n)
+batch_B_list = zeros(P-1, m-1, n, n)
+temp_B_list = zeros(P-1, m-1, n, n)
+
+@views for j = 1:P-1
+
+    batch_A_list[j, :, :, :] = A_list[I_separator[j]+1:I_separator[j+1]-1, :, :]
+    batch_B_list[j, :, :, :] = B_list[I_separator[j]+1:I_separator[j+1]-1-1, :, :]
+
+end
 
 for j = 1:P-1
 
-    data = TriDiagBlockData(m, A_list[I_separator[j]+1:I_separator[j+1]-1, :, :], B_list[I_separator[j]+1:I_separator[j+1]-1-1, :, :],  zeros(m, n, n))
+    temp_B_list[j, 1, :, :] = inv(batch_A_list[j, 1, :, :]) * batch_B_list[j, 1, :, :]
 
-    ThomasFactorize(data)
+    for i = 2:m-1
+        
+        temp_B_list[j, i, :, :] = inv(batch_A_list[j, i, :, :] - batch_B_list[j, i-1, :, :]' * temp_B_list[j, i-1, :, :]) * batch_B_list[j, i, :, :]
 
-    ThomasSolve(data, d_list[I_separator[j]+1:I_separator[j+1]-1, :], x_temp_list)
-    x_list[I_separator[j]+1:I_separator[j+1]-1, :] = x_temp_list
+    end
+end
+
+
+####################
+
+batch_d_list = zeros(P-1, m, n)
+temp_d_list = zeros(P-1, m, n)
+
+@views for j = 1:P-1
+
+    batch_d_list[j, :, :] = d_list[I_separator[j]+1:I_separator[j+1]-1, :]
+
+end
+
+for j = 1:P-1
+
+    temp_d_list[j, 1, :] = inv(batch_A_list[j, 1, :, :]) * batch_d_list[j, 1, :]
+
+    for i = 2:m
+        
+        temp_d_list[j, i, :] = inv(batch_A_list[j, i, :, :] - batch_B_list[j, i-1, :, :]' * temp_B_list[j, i-1, :, :]) * (batch_d_list[j, i, :] - batch_B_list[j, i-1, :, :]' * temp_d_list[j, i-1, :])
+
+    end
+end
+
+for j = 1:P-1
+
+    x_list[I_separator[j]+m, :] = temp_d_list[j, m, :]
+
+    for i = m-1:-1:1
+
+        x_list[I_separator[j]+i, :] = temp_d_list[j, i, :] - temp_B_list[j, i, :, :] *  x_list[I_separator[j]+i+1, :]
+
+    end
 
 end
 
 x_list - xtrue_list
-
