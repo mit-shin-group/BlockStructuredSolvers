@@ -34,7 +34,7 @@ mutable struct TriDiagBlockData{
 
 end
 
-function factorize(
+function factorize!(
     data::TriDiagBlockData
 )   
 
@@ -56,6 +56,8 @@ function factorize(
     batch_B_list = data.batch_B_list
     temp_A_list = data.temp_A_list
     temp_B_list = data.temp_B_list
+
+    ipiv = data.ipiv
 
     ####################################################################
     @views for j = 1:P-1 #convert to while
@@ -83,13 +85,14 @@ function factorize(
 
     @views for j = 1:P-1
 
-        LAPACK.gesv!(temp_A_list[j][1], temp_B_list[j][1])
+        LAPACK.getrf!(temp_A_list[j][1], ipiv)
+        LAPACK.getrs!('N', temp_A_list[j][1], ipiv, temp_B_list[j][1])
 
         for i = 2:m-1
 
             BLAS.gemm!('T', 'N', -1.0, batch_B_list[j][i-1], temp_B_list[j][i-1], 1.0, temp_A_list[j][i])
-            # temp_A_list[j][i] = batch_A_list[j][i] - batch_B_list[j][i-1]' * temp_B_list[j][i-1]
-            LAPACK.gesv!(temp_A_list[j][i], temp_B_list[j][i])
+            LAPACK.getrf!(temp_A_list[j][i], ipiv)
+            LAPACK.getrs!('N', temp_A_list[j][i], ipiv, temp_B_list[j][i])
 
         end
     end
@@ -123,6 +126,8 @@ function solve(
     temp_A_list = data.temp_A_list
     temp_B_list = data.temp_B_list
 
+    ipiv = data.ipiv
+
     @views for j = 1:P-1
 
         for i = 1:m
@@ -154,20 +159,20 @@ function solve(
     
     @views for j = 1:P-1
 
-        LAPACK.gesv!(batch_A_list[j][1], batch_d_list[j][1])
+        LAPACK.getrf!(batch_A_list[j][1], ipiv)
+        LAPACK.getrs!('N', batch_A_list[j][1], ipiv, batch_d_list[j][1])
     
         for i = 2:m
             
             BLAS.gemm!('T', 'N', -1.0, batch_B_list[j][i-1], batch_d_list[j][i-1], 1.0, batch_d_list[j][i])
-            # batch_d_list[j][i] -= batch_B_list[j][i-1]' * batch_d_list[j][i-1]
-            temp_A_list[j][i] = batch_A_list[j][i]
-            BLAS.gemm!('T', 'N', -1.0, batch_B_list[j][i-1], temp_B_list[j][i-1], 1.0, temp_A_list[j][i])
-            LAPACK.gesv!(temp_A_list[j][i], batch_d_list[j][i])
+            BLAS.gemm!('T', 'N', -1.0, batch_B_list[j][i-1], temp_B_list[j][i-1], 1.0, batch_A_list[j][i])
+            LAPACK.getrf!(batch_A_list[j][i], ipiv)
+            LAPACK.getrs!('N', batch_A_list[j][i], ipiv, batch_d_list[j][i])
     
         end
     end
     
-    for j = 1:P-1
+    @views for j = 1:P-1
 
         x_list[I_separator[j]+m, :] = batch_d_list[j][m]
     

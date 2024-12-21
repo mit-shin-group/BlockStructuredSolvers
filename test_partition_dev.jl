@@ -127,6 +127,8 @@ end
 temp_A_list = deepcopy(batch_A_list);
 temp_B_list = deepcopy(batch_B_list);
 
+ipiv = Vector{LinearAlgebra.BlasInt}(undef, n);
+
 @views for j = 1:P-1
 
     # temp_B_list[j][1] = inv(batch_A_list[j][1]) * batch_B_list[j][1]
@@ -150,7 +152,8 @@ temp_B_list = deepcopy(batch_B_list);
         # temp_B_list[j][i] = copy(batch_B_list[j][i])
         # temp_A = batch_A_list[j][i] - batch_B_list[j][i-1]' * temp_B_list[j][i-1]
         BLAS.gemm!('T', 'N', -1.0, batch_B_list[j][i-1], temp_B_list[j][i-1], 1.0, temp_A_list[j][i])
-        LAPACK.gesv!(temp_A_list[j][i], temp_B_list[j][i])
+        LAPACK.getrf!(temp_A_list[j][i], ipiv)
+        LAPACK.getrs!('N', temp_A_list[j][i], ipiv, temp_B_list[j][i])
         # cholesky!(batch_A_list[j][i])
         # LAPACK.potrs!('U', batch_A_list[j][i], temp_B_list[j][i])
 

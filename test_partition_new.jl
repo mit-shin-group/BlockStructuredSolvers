@@ -2,10 +2,10 @@ using LinearAlgebra
 
 import Pkg
 include("TriDiagBlock.jl")
-import .TriDiagBlock: TriDiagBlockData, factorize, solve
+import .TriDiagBlock: TriDiagBlockData, factorize!, solve
 
 N = 97 # number of diagonal blocks
-n = 20 # size of each block
+n = 10 # size of each block
 P = 17 # number of separators
 m  = trunc(Int, (N - P) / (P - 1))
 
@@ -70,10 +70,10 @@ temp_B_list = deepcopy(batch_B_list);
 
 
 ##################################################################################################################################
-ipiv = zeros(Int, n);
+ipiv = Vector{LinearAlgebra.BlasInt}(undef, n);
 data = TriDiagBlockData(N, m, n, P, 1:(m+1):N, A_list, B_list, batch_A_list, batch_B_list, temp_A_list, temp_B_list, MA, MB, MD, ipiv);
 
-@time factorize(data)
+@time factorize!(data)
 
 x_list = zeros(N, n);
 v = zeros((P-1) * m * n);
