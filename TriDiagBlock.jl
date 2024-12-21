@@ -123,7 +123,7 @@ function solve(
     temp_A_list = data.temp_A_list
     temp_B_list = data.temp_B_list
 
-    for j = 1:P-1
+    @views for j = 1:P-1
 
         for i = 1:m
             v[(j-1)*m*n+(i-1)*n+1:(j-1)*m*n+i*n] = d_list[I_separator[j]+i]
@@ -131,7 +131,7 @@ function solve(
     
     end
     
-    for j = 1:P
+    @views for j = 1:P
     
         u[(j-1)*n+1:j*n] = d_list[I_separator[j]]
     
@@ -140,8 +140,10 @@ function solve(
     x_list[I_separator, :] = reshape(inv(MD - MB' * inv(MA) * MB) * (u - MB' * inv(MA) * v), n, P)'
 
     @views for j = 1:P-1
+        # BLAS.gemm!('N', 'N', -1.0, B_list[I_separator[j]], x_list[I_separator[j], :], 1.0, d_list[I_separator[j]+1])
         d_list[I_separator[j]+1] -= B_list[I_separator[j]]' * x_list[I_separator[j], :]
         d_list[I_separator[j+1]-1] -= B_list[I_separator[j+1]-1] * x_list[I_separator[j+1], :]
+        # BLAS.gemm!('N', 'N', -1.0, B_list[I_separator[j+1]-1], x_list[I_separator[j+1], :], 1.0, d_list[I_separator[j+1]-1])
     end
 
     @views for j = 1:P-1
@@ -150,14 +152,16 @@ function solve(
     
     end
     
-    for j = 1:P-1
+    @views for j = 1:P-1
 
         LAPACK.gesv!(batch_A_list[j][1], batch_d_list[j][1])
     
         for i = 2:m
-    
-            batch_d_list[j][i] -= batch_B_list[j][i-1]' * batch_d_list[j][i-1]
-            temp_A_list[j][i] = batch_A_list[j][i] - batch_B_list[j][i-1]' * temp_B_list[j][i-1]
+            
+            BLAS.gemm!('T', 'N', -1.0, batch_B_list[j][i-1], batch_d_list[j][i-1], 1.0, batch_d_list[j][i])
+            # batch_d_list[j][i] -= batch_B_list[j][i-1]' * batch_d_list[j][i-1]
+            temp_A_list[j][i] = batch_A_list[j][i]
+            BLAS.gemm!('T', 'N', -1.0, batch_B_list[j][i-1], temp_B_list[j][i-1], 1.0, temp_A_list[j][i])
             LAPACK.gesv!(temp_A_list[j][i], batch_d_list[j][i])
     
         end
