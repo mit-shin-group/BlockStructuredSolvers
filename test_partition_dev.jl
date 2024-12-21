@@ -136,8 +136,8 @@ temp_B_list = deepcopy(batch_B_list);
     # qr!(batch_A_list[j][1])
     # temp_B_list[j][1] = copy(batch_B_list[j][1])
     # ldiv!(temp_B_list[j][1], cholesky(batch_A_list[j][1]), batch_B_list[j][1])
-    temp_A = deepcopy(batch_A_list[j][1])
-    LAPACK.gesv!(temp_A, temp_B_list[j][1])
+    # temp_A = deepcopy(batch_A_list[j][1])
+    LAPACK.gesv!(temp_A_list[j][1], temp_B_list[j][1])
 
     for i = 2:m-1
 
@@ -148,8 +148,9 @@ temp_B_list = deepcopy(batch_B_list);
         # qr!(batch_A_list[j][i])
         # ldiv!(temp_B_list[j][i], lu(batch_A_list[j][i] - batch_B_list[j][i-1]' * temp_B_list[j][i-1]), batch_B_list[j][i])
         # temp_B_list[j][i] = copy(batch_B_list[j][i])
-        temp_A = batch_A_list[j][i] - batch_B_list[j][i-1]' * temp_B_list[j][i-1]
-        LAPACK.gesv!(temp_A, temp_B_list[j][i])
+        # temp_A = batch_A_list[j][i] - batch_B_list[j][i-1]' * temp_B_list[j][i-1]
+        BLAS.gemm!('T', 'N', -1.0, batch_B_list[j][i-1], temp_B_list[j][i-1], 1.0, temp_A_list[j][i])
+        LAPACK.gesv!(temp_A_list[j][i], temp_B_list[j][i])
         # cholesky!(batch_A_list[j][i])
         # LAPACK.potrs!('U', batch_A_list[j][i], temp_B_list[j][i])
 

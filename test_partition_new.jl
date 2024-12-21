@@ -5,14 +5,14 @@ include("TriDiagBlock.jl")
 import .TriDiagBlock: TriDiagBlockData, factorize, solve
 
 N = 97 # number of diagonal blocks
-n = 8 # size of each block
+n = 20 # size of each block
 P = 17 # number of separators
 m  = trunc(Int, (N - P) / (P - 1))
 
 #######################################
 A_list = Vector{Matrix{Float64}}();
 for i = 1:N
-    temp = rand(Float64, 8, 8);
+    temp = rand(Float64, n, n);
     temp = temp * temp';
     temp = (temp + temp') / 2
     push!(A_list, temp);
@@ -21,7 +21,7 @@ end
 
 B_list = Vector{Matrix{Float64}}();
 for i = 1:N-1
-    temp = rand(Float64, 8, 8);
+    temp = rand(Float64, n, n);
     temp = temp * temp';
     temp = (temp + temp') / 2
     push!(B_list, temp);
@@ -70,8 +70,8 @@ temp_B_list = deepcopy(batch_B_list);
 
 
 ##################################################################################################################################
-
-data = TriDiagBlockData(N, m, n, P, 1:(m+1):N, A_list, B_list, batch_A_list, batch_B_list, temp_A_list, temp_B_list, MA, MB, MD);
+ipiv = zeros(Int, n);
+data = TriDiagBlockData(N, m, n, P, 1:(m+1):N, A_list, B_list, batch_A_list, batch_B_list, temp_A_list, temp_B_list, MA, MB, MD, ipiv);
 
 @time factorize(data)
 

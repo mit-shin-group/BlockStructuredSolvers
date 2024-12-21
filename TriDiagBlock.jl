@@ -30,6 +30,8 @@ mutable struct TriDiagBlockData{
     MB::MS
     MD::MS
 
+    ipiv::Vector{Int}
+
 end
 
 function factorize(
@@ -85,7 +87,8 @@ function factorize(
 
         for i = 2:m-1
 
-            temp_A_list[j][i] = batch_A_list[j][i] - batch_B_list[j][i-1]' * temp_B_list[j][i-1]
+            BLAS.gemm!('T', 'N', -1.0, batch_B_list[j][i-1], temp_B_list[j][i-1], 1.0, temp_A_list[j][i])
+            # temp_A_list[j][i] = batch_A_list[j][i] - batch_B_list[j][i-1]' * temp_B_list[j][i-1]
             LAPACK.gesv!(temp_A_list[j][i], temp_B_list[j][i])
 
         end
