@@ -10,52 +10,81 @@ P = 17 # number of separators
 m  = trunc(Int, (N - P) / (P - 1))
 
 #######################################
-A_list = zeros(N, 8, 8)
+A_list = Vector{Matrix{Float64}}();
 for i = 1:N
-    temp = rand(Float64, 8, 8)
-    A_list[i, :, :] = temp * temp'
+    temp = rand(Float64, 8, 8);
+    temp = temp * temp';
+    temp = (temp + temp') / 2
+    push!(A_list, temp);
 
 end
 
-B_list = zeros(N-1, 8, 8)
+B_list = Vector{Matrix{Float64}}();
 for i = 1:N-1
-    temp = rand(Float64, 8, 8)
-    B_list[i, :, :] = temp * temp'
-    # B_list[i, :, :] = Diagonal(ones(8)) * 0.01
+    temp = rand(Float64, 8, 8);
+    temp = temp * temp';
+    temp = (temp + temp') / 2
+    push!(B_list, temp);
 end
 
-xtrue_list = rand(N, n)
-d_list = zeros(N, n)
+x_true = rand(N, n);
+xtrue_list = Vector{Vector{Float64}}();
+for i = 1:N
+    push!(xtrue_list, x_true[i, :]);
+end
 
-d_list[1, :] = A_list[1, :, :] * xtrue_list[1, :] + B_list[1, :, :] * xtrue_list[2, :]
+d_list = Vector{Vector{Float64}}();
+
+push!(d_list, A_list[1] * xtrue_list[1] + B_list[1] * xtrue_list[2]);
 
 for i = 2:N-1
 
-    d_list[i, :] = B_list[i-1, :, :]' * xtrue_list[i-1, :] + A_list[i, :, :] * xtrue_list[i, :] + B_list[i, :, :] * xtrue_list[i+1, :]
+    push!(d_list,  B_list[i-1]' * xtrue_list[i-1] + A_list[i] * xtrue_list[i] + B_list[i] * xtrue_list[i+1]);
 
 end
 
-d_list[N, :] = B_list[N-1, :, :]' * xtrue_list[N-1, :] + A_list[N, :, :] * xtrue_list[N, :]
+push!(d_list, B_list[N-1]' * xtrue_list[N-1] + A_list[N] * xtrue_list[N]);
+#################################################################
+
+I_separator = 1:(m+1):N
+
+####################################################################
+MA = zeros((P-1) * m * n, (P-1) * m * n);
+MB = zeros((P-1) * m * n, P * n);
+MD = zeros(P * n, P * n);
+
+######
+batch_A_list = Vector{Vector{Matrix{Float64}}}();
+batch_B_list = Vector{Vector{Matrix{Float64}}}();
+
+@views for j = 1:P-1
+
+    push!(batch_A_list, A_list[I_separator[j]+1:I_separator[j+1]-1])
+    push!(batch_B_list, B_list[I_separator[j]+1:I_separator[j+1]-1-1])
+
+end
+
+temp_A_list = deepcopy(batch_A_list);
+temp_B_list = deepcopy(batch_B_list);
 
 
-###########
 
-batch_A_list = zeros(P-1, m, n, n)
-batch_B_list = zeros(P-1, m-1, n, n)
-temp_B_list = zeros(P-1, m-1, n, n)
+##################################################################################################################################
 
-MA = zeros((P-1) * m * n, (P-1) * m * n)
-MB = zeros((P-1) * m * n, P * n)
-MD = zeros(P * n, P * n)
+data = TriDiagBlockData(N, m, n, P, 1:(m+1):N, A_list, B_list, batch_A_list, batch_B_list, temp_A_list, temp_B_list, MA, MB, MD);
 
-data = TriDiagBlockData(N, m, n, P, 1:(m+1):N, A_list, B_list, batch_A_list, batch_B_list, temp_B_list, MA, MB, MD)
+@time factorize(data)
 
-factorize(data)
+x_list = zeros(N, n);
+v = zeros((P-1) * m * n);
+u = zeros(P * n);
+temp_d_list = zeros(P-1, m, n);
+batch_d_list = Vector{Vector{Vector{Float64}}}();
 
-x_list = zeros(N, n)
-v = zeros((P-1) * m * n)
-u = zeros(P * n)
-batch_d_list = zeros(P-1, m, n)
-temp_d_list = zeros(P-1, m, n)
+@views for j = 1:P-1
 
-solve(data, d_list, u, v, batch_d_list, temp_d_list, x_list)
+    push!(batch_d_list, d_list[I_separator[j]+1:I_separator[j+1]-1])
+
+end
+
+@time solve(data, d_list, u, v, batch_d_list, temp_d_list, x_list)
