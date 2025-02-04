@@ -6,7 +6,7 @@ export TriDiagBlockData, factorize, solve
 
 mutable struct TriDiagBlockData{
     T, 
-    MT <: Vector{Matrix{T}}, 
+    MT <: Vector{Matrix{T}}, #TODO
     MR <: Vector{Vector{Matrix{T}}}, 
     MS <: AbstractArray{T, 2}
     } # TODO preallocate all the struct
