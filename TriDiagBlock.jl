@@ -127,7 +127,6 @@ function solve(
     u,
     v,
     batch_d_list,
-    temp_d_list,
     x_list
     )
 

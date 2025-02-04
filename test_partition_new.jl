@@ -73,7 +73,6 @@ data = TriDiagBlockData(N, m, n, P, 1:(m+1):N, A_list, B_list, batch_A_list, bat
 x_list = zeros(N, n);
 v = zeros((P-1) * m * n);
 u = zeros(P * n);
-temp_d_list = zeros(P-1, m, n);
 batch_d_list = zeros(P-1, m, n);
 
 @views for j = 1:P-1
@@ -82,7 +81,7 @@ batch_d_list = zeros(P-1, m, n);
 
 end
 
-@time solve(data, d_list, u, v, batch_d_list, temp_d_list, x_list);
+@time solve(data, d_list, u, v, batch_d_list, x_list);
 
 # x_list - x_true
 norm(x_list - x_true)
