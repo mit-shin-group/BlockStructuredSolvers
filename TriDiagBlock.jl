@@ -34,7 +34,9 @@ mutable struct TriDiagBlockData{
     A::MS
     B::MS
     C::MS
-    D::MU
+
+    D1::MU
+    D2::MU
 
     ipiv::Vector{Int}
 
@@ -150,7 +152,8 @@ function solve(
     A = data.A
     B = data.B
     C = data.C
-    D = data.D
+    D1 = data.D1
+    D2 = data.D2
 
     @views for j = 1:P-1
 
@@ -170,48 +173,65 @@ function solve(
 
     @views for j = 1:P-1
         # BLAS.gemm!('N', 'N', -1.0, B_list[I_separator[j]], x_list[I_separator[j], :], 1.0, d_list[I_separator[j]+1])
-        d_list[I_separator[j]+1, :] -= B_list[I_separator[j], :, :]' * x_list[I_separator[j], :]
-        d_list[I_separator[j+1]-1, :] -= B_list[I_separator[j+1]-1, :, :] * x_list[I_separator[j+1], :]
+        copyto!(D1, d_list[I_separator[j]+1, :])
+        copyto!(B, B_list[I_separator[j], :, :]')
+        copyto!(D2, x_list[I_separator[j], :])
+        mul!(D1, B, D2, -1.0, 1.0)
+        copyto!(d_list[I_separator[j]+1, :], D1)
+    
+        copyto!(D1, d_list[I_separator[j+1]-1, :])
+        copyto!(B, B_list[I_separator[j+1]-1, :, :])
+        copyto!(D2, x_list[I_separator[j+1], :])
+        mul!(D1, B, D2, -1.0, 1.0)
+        copyto!(d_list[I_separator[j+1]-1, :], D1)
+        # d_list[I_separator[j]+1, :] -= B_list[I_separator[j], :, :]' * x_list[I_separator[j], :]
+        # d_list[I_separator[j+1]-1, :] -= B_list[I_separator[j+1]-1, :, :] * x_list[I_separator[j+1], :]
         # BLAS.gemm!('N', 'N', -1.0, B_list[I_separator[j+1]-1], x_list[I_separator[j+1], :], 1.0, d_list[I_separator[j+1]-1])
     end
 
     @views for j = 1:P-1
-
-        batch_d_list[j, :, :] = d_list[I_separator[j]+1:I_separator[j+1]-1, :]
+        
+        copyto!(batch_d_list[j, :, :], d_list[I_separator[j]+1:I_separator[j+1]-1, :])
+        # batch_d_list[j, :, :] = d_list[I_separator[j]+1:I_separator[j+1]-1, :]
     
     end
     
     @views for j = 1:P-1
 
         copyto!(A, batch_A_list[j, 1, :, :])
-        copyto!(D, batch_d_list[j, 1, :])
-        LAPACK.gesv!(A, D)
-        copyto!(batch_d_list[j, 1, :], D)
+        copyto!(D1, batch_d_list[j, 1, :])
+        LAPACK.getrf!(A, ipiv)
+        LAPACK.getrs!('N', A, ipiv, D1) 
+        copyto!(batch_d_list[j, 1, :], D1)
     
         for i = 2:m
     
-            # qr!(batch_A_list[j][i])
-            batch_d_list[j, i, :, :] -= batch_B_list[j, i-1, :, :]' * D
-            # ldiv!(lu(batch_A_list[j][i] - batch_B_list[j][i-1]' * temp_B_list[j][i-1]), batch_d_list[j][i])
-            copyto!(D, batch_d_list[j, i, :])
-            LAPACK.gesv!(batch_A_list[j, i, :, :] - batch_B_list[j, i-1, :, :]' * temp_B_list[j, i-1, :, :], D)
-            copyto!(batch_d_list[j, i, :], D)
-    
-            # batch_d_list[j][i] = inv(batch_A_list[j][i] - batch_B_list[j][i-1]' * temp_B_list[j][i-1]) * (batch_d_list[j][i] - batch_B_list[j][i-1]' * batch_d_list[j][i-1])
-    
-            # temp_d_list[j][i] -= batch_B_list[j][i-1]' * temp_d_list[j][i-1]
-            # LAPACK.potrs!('U', batch_A_list[j][i], temp_d_list[j][i])
+            copyto!(D2, batch_d_list[j, i, :])
+            copyto!(B, batch_B_list[j, i-1, :, :]')
+            copyto!(C, temp_B_list[j, i-1, :, :])
+            mul!(D2, B, D1, -1.0, 1.0)
+            copyto!(A, batch_A_list[j, i, :, :])
+            mul!(A, B, C, -1.0, 1.0)
+            LAPACK.getrf!(A, ipiv)
+            LAPACK.getrs!('N', A, ipiv, D2) 
+            copyto!(batch_d_list[j, i, :], D2)
+            copyto!(D1, batch_d_list[j, i, :])
     
         end
     end
     
     @views for j = 1:P-1
 
-        x_list[I_separator[j]+m, :] = batch_d_list[j, m, :]
+        copyto!(x_list[I_separator[j]+m, :], batch_d_list[j, m, :])
     
         for i = m-1:-1:1
-    
-            x_list[I_separator[j]+i, :] = batch_d_list[j, i, :] - temp_B_list[j, i, :, :] *  x_list[I_separator[j]+i+1, :]
+            
+            copyto!(D1, batch_d_list[j, i, :])
+            copyto!(B, temp_B_list[j, i, :, :])
+            copyto!(D2, x_list[I_separator[j]+i+1, :]) #TODO optimize the reuse D1/D2
+            mul!(D1, B, D2, -1.0, 1.0)
+            copyto!(x_list[I_separator[j]+i, :], D1)
+            # x_list[I_separator[j]+i, :] = batch_d_list[j, i, :] - temp_B_list[j, i, :, :] *  x_list[I_separator[j]+i+1, :]
     
         end
     

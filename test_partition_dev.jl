@@ -9,6 +9,12 @@ n = 8 # size of each block
 P = 17 # number of separators
 m  = trunc(Int, (N - P) / (P - 1))
 
+A = similar(temp_A_list, n, n);
+B = similar(temp_B_list, n, n);
+C = similar(temp_A_list, n, n);
+D1 = similar(temp_A_list, n);
+D2 = similar(temp_A_list, n);
+
 #######################################
 A_list = zeros(N, 8, 8);
 for i = 1:N
@@ -93,8 +99,20 @@ x_list[I_separator, :] = reshape(x_separator_sol, n, P)';
 
 ######
 @views for j = 1:P-1
-    d_list[I_separator[j]+1, :] -= B_list[I_separator[j], :, :]' * x_list[I_separator[j], :]
-    d_list[I_separator[j+1]-1, :] -= B_list[I_separator[j+1]-1, :, :] * x_list[I_separator[j+1], :]
+    # d_list[I_separator[j]+1, :] -= B_list[I_separator[j], :, :]' * x_list[I_separator[j], :]
+    # d_list[I_separator[j+1]-1, :] -= B_list[I_separator[j+1]-1, :, :] * x_list[I_separator[j+1], :]
+
+    copyto!(D1, d_list[I_separator[j]+1, :])
+    copyto!(B, B_list[I_separator[j], :, :]')
+    copyto!(D2, x_list[I_separator[j], :])
+    mul!(D1, B, D2, -1.0, 1.0)
+    copyto!(d_list[I_separator[j]+1, :], D1)
+
+    copyto!(D1, d_list[I_separator[j+1]-1, :])
+    copyto!(B, B_list[I_separator[j+1]-1, :, :])
+    copyto!(D2, x_list[I_separator[j+1], :])
+    mul!(D1, B, D2, -1.0, 1.0)
+    copyto!(d_list[I_separator[j+1]-1, :], D1)
 end
 
 batch_A_list = zeros(P-1, m, n, n);
@@ -118,51 +136,32 @@ temp_B_list = deepcopy(batch_B_list);
 A = similar(temp_A_list, n, n)
 B = similar(temp_B_list, n, n)
 C = similar(temp_A_list, n, n)
-D = similar(temp_A_list, n)
+D1 = similar(temp_A_list, n)
+D2 = similar(temp_A_list, n)
 
 ipiv = Vector{LinearAlgebra.BlasInt}(undef, n);
 
 @views for j = 1:P-1
 
-    # temp_B_list[j][1] = inv(batch_A_list[j][1]) * batch_B_list[j][1]
-
-    # cholesky!(batch_A_list[j][1])
-    # LAPACK.potrs!('U', batch_A_list[j][1], temp_B_list[j][1])
-    # qr!(batch_A_list[j][1])
-    # temp_B_list[j][1] = copy(batch_B_list[j][1])
-    # ldiv!(temp_B_list[j][1], cholesky(batch_A_list[j][1]), batch_B_list[j][1])
-    # temp_A = deepcopy(batch_A_list[j][1])
     copyto!(A, temp_A_list[j, 1, :, :])  # Avoids allocation, just copies data
     copyto!(B, temp_B_list[j, 1, :, :])  # Avoids allocation
-    LAPACK.gesv!(A, B)
+    LAPACK.getrf!(A, ipiv)
+    LAPACK.getrs!('N', A, ipiv, B)  
     copyto!(temp_B_list[j, 1, :, :], B)  # Store the result back if needed
 
     for i = 2:m-1
 
-        # temp_B_list[j][i] = inv(batch_A_list[j][i] - batch_B_list[j][i-1]' * temp_B_list[j][i-1]) * batch_B_list[j][i]
-
-        
-        # batch_A_list[j][i] -= batch_B_list[j][i-1]' * temp_B_list[j][i-1]
-        # qr!(batch_A_list[j][i])
-        # ldiv!(temp_B_list[j][i], lu(batch_A_list[j][i] - batch_B_list[j][i-1]' * temp_B_list[j][i-1]), batch_B_list[j][i])
-        # temp_B_list[j][i] = copy(batch_B_list[j][i])
-        # temp_A = batch_A_list[j][i] - batch_B_list[j][i-1]' * temp_B_list[j][i-1]
         copyto!(A, batch_B_list[j, i-1, :, :])
         copyto!(B, temp_B_list[j, i-1, :, :])
         copyto!(C, temp_A_list[j, i, :, :])
 
         mul!(C, A, B, -1.0, 1.0)
 
-        LAPACK.getrf!(C, ipiv)
-
-        # Solve system using LU factors
         copyto!(B, temp_B_list[j, i, :, :])  # Ensure B is contiguous
-        LAPACK.getrs!('N', C, ipiv, B)
-
-        # Store back the solution
+        LAPACK.getrf!(C, ipiv)
+        LAPACK.getrs!('N', C, ipiv, B)    
         copyto!(temp_B_list[j, i, :, :], B)
-        # cholesky!(batch_A_list[j][i])
-        # LAPACK.potrs!('U', batch_A_list[j][i], temp_B_list[j][i])
+
 
     end
 end
@@ -182,27 +181,24 @@ end
 
 @views for j = 1:P-1
 
-    # ldiv!(cholesky(batch_A_list[j][1]), batch_d_list[j][1])
     copyto!(A, batch_A_list[j, 1, :, :])
-    copyto!(D, batch_d_list[j, 1, :])
-    LAPACK.gesv!(A, D)
-    copyto!(batch_d_list[j, 1, :], D)
-    # batch_d_list[j][1] = inv(batch_A_list[j][1]) * batch_d_list[j][1]
-    # LAPACK.potrs!('U', batch_A_list[j][1], temp_d_list[j][1])
+    copyto!(D1, batch_d_list[j, 1, :])
+    LAPACK.getrf!(A, ipiv)
+    LAPACK.getrs!('N', A, ipiv, D1) 
+    copyto!(batch_d_list[j, 1, :], D1)
 
     for i = 2:m
 
-        # qr!(batch_A_list[j][i])
-        batch_d_list[j, i, :, :] -= batch_B_list[j, i-1, :, :]' * D
-        # ldiv!(lu(batch_A_list[j][i] - batch_B_list[j][i-1]' * temp_B_list[j][i-1]), batch_d_list[j][i])
-        copyto!(D, batch_d_list[j, i, :])
-        LAPACK.gesv!(batch_A_list[j, i, :, :] - batch_B_list[j, i-1, :, :]' * temp_B_list[j, i-1, :, :], D)
-        copyto!(batch_d_list[j, i, :], D)
-
-        # batch_d_list[j][i] = inv(batch_A_list[j][i] - batch_B_list[j][i-1]' * temp_B_list[j][i-1]) * (batch_d_list[j][i] - batch_B_list[j][i-1]' * batch_d_list[j][i-1])
-
-        # temp_d_list[j][i] -= batch_B_list[j][i-1]' * temp_d_list[j][i-1]
-        # LAPACK.potrs!('U', batch_A_list[j][i], temp_d_list[j][i])
+        copyto!(D2, batch_d_list[j, i, :])
+        copyto!(B, batch_B_list[j, i-1, :, :]')
+        copyto!(C, temp_B_list[j, i-1, :, :])
+        mul!(D2, B, D1, -1.0, 1.0)
+        copyto!(A, batch_A_list[j, i, :, :])
+        mul!(A, B, C, -1.0, 1.0)
+        LAPACK.getrf!(A, ipiv)
+        LAPACK.getrs!('N', A, ipiv, D2) 
+        copyto!(batch_d_list[j, i, :], D2)
+        copyto!(D1, batch_d_list[j, i, :])
 
     end
 end

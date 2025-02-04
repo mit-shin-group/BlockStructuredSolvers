@@ -63,9 +63,10 @@ ipiv = Vector{LinearAlgebra.BlasInt}(undef, n);
 A = similar(temp_A_list, n, n);
 B = similar(temp_B_list, n, n);
 C = similar(temp_A_list, n, n);
-D = similar(temp_A_list, n);
+D1 = similar(temp_A_list, n);
+D2 = similar(temp_A_list, n);
 
-data = TriDiagBlockData(N, m, n, P, 1:(m+1):N, A_list, B_list, batch_A_list, batch_B_list, temp_A_list, temp_B_list, MA, MB, MD, A, B, C, D, ipiv);
+data = TriDiagBlockData(N, m, n, P, 1:(m+1):N, A_list, B_list, batch_A_list, batch_B_list, temp_A_list, temp_B_list, MA, MB, MD, A, B, C, D1, D2, ipiv);
 
 @time factorize!(data)
 
@@ -73,7 +74,7 @@ x_list = zeros(N, n);
 v = zeros((P-1) * m * n);
 u = zeros(P * n);
 temp_d_list = zeros(P-1, m, n);
-batch_d_list = zeros(P-1, m, n)
+batch_d_list = zeros(P-1, m, n);
 
 @views for j = 1:P-1
 
@@ -81,4 +82,7 @@ batch_d_list = zeros(P-1, m, n)
 
 end
 
-@time solve(data, d_list, u, v, batch_d_list, temp_d_list, x_list)
+@time solve(data, d_list, u, v, batch_d_list, temp_d_list, x_list);
+
+# x_list - x_true
+norm(x_list - x_true)
