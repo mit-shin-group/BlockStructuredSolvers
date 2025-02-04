@@ -23,17 +23,17 @@ for i = 1:N-1
     B_list[i, :, :] = temp * temp'
 end
 
-xtrue_list = rand(N, n);
+x_true = rand(N, n);
 d_list = zeros(N, n);
-d_list[1, :] = A_list[1, :, :] * xtrue_list[1, :] + B_list[1, :, :] * xtrue_list[2, :];
+d_list[1, :] = A_list[1, :, :] * x_true[1, :] + B_list[1, :, :] * x_true[2, :];
 
 for i = 2:N-1
 
-    d_list[i, :] = B_list[i-1, :, :]' * xtrue_list[i-1, :] + A_list[i, :, :] * xtrue_list[i, :] + B_list[i, :, :] * xtrue_list[i+1, :];
+    d_list[i, :] = B_list[i-1, :, :]' * x_true[i-1, :] + A_list[i, :, :] * x_true[i, :] + B_list[i, :, :] * x_true[i+1, :];
 
 end
 
-d_list[N, :] = B_list[N-1, :, :]' * xtrue_list[N-1, :] + A_list[N, :, :] * xtrue_list[N, :];
+d_list[N, :] = B_list[N-1, :, :]' * x_true[N-1, :] + A_list[N, :, :] * x_true[N, :];
 #################################################################
 
 I_separator = 1:(m+1):N
@@ -115,10 +115,10 @@ end
 temp_A_list = deepcopy(batch_A_list);
 temp_B_list = deepcopy(batch_B_list);
 
-A = similar(temp_A_list, size(temp_A_list, 3), size(temp_A_list, 4))
-B = similar(temp_B_list, size(temp_B_list, 3), size(temp_B_list, 4))
-C = similar(temp_A_list, size(temp_A_list, 3), size(temp_A_list, 4))
-D = similar(temp_A_list, size(temp_A_list, 3))
+A = similar(temp_A_list, n, n)
+B = similar(temp_B_list, n, n)
+C = similar(temp_A_list, n, n)
+D = similar(temp_A_list, n)
 
 ipiv = Vector{LinearAlgebra.BlasInt}(undef, n);
 
@@ -151,8 +151,7 @@ ipiv = Vector{LinearAlgebra.BlasInt}(undef, n);
         copyto!(B, temp_B_list[j, i-1, :, :])
         copyto!(C, temp_A_list[j, i, :, :])
 
-        BLAS.gemm!('T', 'N', -1.0, A, B, 1.0, C)
-
+        mul!(C, A, B, -1.0, 1.0)
 
         LAPACK.getrf!(C, ipiv)
 
@@ -161,7 +160,6 @@ ipiv = Vector{LinearAlgebra.BlasInt}(undef, n);
         LAPACK.getrs!('N', C, ipiv, B)
 
         # Store back the solution
-        copyto!(temp_A_list[j, i, :, :], A)
         copyto!(temp_B_list[j, i, :, :], B)
         # cholesky!(batch_A_list[j][i])
         # LAPACK.potrs!('U', batch_A_list[j][i], temp_B_list[j][i])
@@ -221,17 +219,4 @@ for j = 1:P-1
 
 end
 
-x_list - xtrue_list
-
-
-
-# ###################
-
-# @views for j = 1:P-1
-
-#     for i = 1:m-1
-        
-#         cholesky!(AA[j][i])
-
-#     end
-# end
+x_list - x_true
