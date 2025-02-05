@@ -4,7 +4,7 @@ using LinearAlgebra
 
 export TriDiagBlockData, factorize, solve
 
-mutable struct TriDiagBlockData{
+struct TriDiagBlockData{
     T, 
     MT <: AbstractArray{T, 3},
     MR <: AbstractArray{T, 4}, 
@@ -60,7 +60,7 @@ function factorize!(
     MB = data.MB
     MD = data.MD
 
-    batch_A_list = data.batch_A_list
+    # batch_A_list = data.batch_A_list
     batch_B_list = data.batch_B_list
     temp_A_list = data.temp_A_list
     temp_B_list = data.temp_B_list
@@ -71,7 +71,7 @@ function factorize!(
     C = data.C
 
     ####################################################################
-    @views for j = 1:P-1 #convert to while
+    @views for j = 1:P-1 #TODO convert to while/improve indexing
         MA[(j-1)*m*n+1:(j-1)*m*n+n, (j-1)*m*n+1:(j-1)*m*n+n] = A_list[I_separator[j]+1, :, :]
         MA[(j-1)*m*n+1:(j-1)*m*n+n, (j-1)*m*n+1+n:(j-1)*m*n+n+n] = B_list[I_separator[j]+1, :, :]
         for i = 2:m-1
@@ -144,7 +144,7 @@ function solve(
     B_list = data.B_list
     batch_A_list = data.batch_A_list
     batch_B_list = data.batch_B_list
-    temp_A_list = data.temp_A_list
+    # temp_A_list = data.temp_A_list
     temp_B_list = data.temp_B_list
 
     ipiv = data.ipiv
@@ -168,7 +168,7 @@ function solve(
     
     end
 
-    x_list[I_separator, :] = reshape(inv(MD - MB' * inv(MA) * MB) * (u - MB' * inv(MA) * v), n, P)'
+    x_list[I_separator, :] = reshape(inv(MD - MB' * inv(MA) * MB) * (u - MB' * inv(MA) * v), n, P)' #TODO non allocation
 
     @views for j = 1:P-1
         # BLAS.gemm!('N', 'N', -1.0, B_list[I_separator[j]], x_list[I_separator[j], :], 1.0, d_list[I_separator[j]+1])
@@ -199,7 +199,7 @@ function solve(
 
         copyto!(A, batch_A_list[j, 1, :, :])
         copyto!(D1, batch_d_list[j, 1, :])
-        LAPACK.getrf!(A, ipiv)
+        LAPACK.getrf!(A, ipiv) #TODO 
         LAPACK.getrs!('N', A, ipiv, D1) 
         copyto!(batch_d_list[j, 1, :], D1)
     
@@ -211,7 +211,7 @@ function solve(
             mul!(D2, B, D1, -1.0, 1.0)
             copyto!(A, batch_A_list[j, i, :, :])
             mul!(A, B, C, -1.0, 1.0)
-            LAPACK.getrf!(A, ipiv)
+            LAPACK.getrf!(A, ipiv) #TODO
             LAPACK.getrs!('N', A, ipiv, D2) 
             copyto!(batch_d_list[j, i, :], D2)
             copyto!(D1, batch_d_list[j, i, :])
