@@ -38,7 +38,7 @@ struct TriDiagBlockData{
     D1::MU
     D2::MU
 
-    ipiv::Vector{Int}
+    F::Cholesky{T, Matrix{T}}
 
 end
 
@@ -65,10 +65,11 @@ function factorize!(
     temp_A_list = data.temp_A_list
     temp_B_list = data.temp_B_list
 
-    ipiv = data.ipiv
     A = data.A
     B = data.B
     C = data.C
+
+    F = data.F
 
     ####################################################################
     @views for j = 1:P-1 #TODO convert to while/improve indexing
@@ -98,21 +99,29 @@ function factorize!(
 
         copyto!(A, temp_A_list[j, 1, :, :])  # Avoids allocation, just copies data
         copyto!(B, temp_B_list[j, 1, :, :])  # Avoids allocation
-        LAPACK.getrf!(A, ipiv)
-        LAPACK.getrs!('N', A, ipiv, B)  
+        # LAPACK.getrf!(A, ipiv)
+        # LAPACK.getrs!('N', A, ipiv, B)  
+        # LAPACK.potrf!('U', A)
+        # LAPACK.potrs!('U', A, B)
+        F = cholesky!(A)
+        ldiv!(F, B)
         copyto!(temp_B_list[j, 1, :, :], B)  # Store the result back if needed
     
         for i = 2:m-1
     
-            copyto!(A, batch_B_list[j, i-1, :, :])
+            copyto!(A, batch_B_list[j, i-1, :, :]')
             copyto!(B, temp_B_list[j, i-1, :, :])
             copyto!(C, temp_A_list[j, i, :, :])
     
             mul!(C, A, B, -1.0, 1.0)
     
             copyto!(B, temp_B_list[j, i, :, :])  # Ensure B is contiguous
-            LAPACK.getrf!(C, ipiv)
-            LAPACK.getrs!('N', C, ipiv, B)    
+            # LAPACK.getrf!(C, ipiv)
+            # LAPACK.getrs!('N', C, ipiv, B)  
+            LAPACK.potrf!('U', C)
+            LAPACK.potrs!('U', C, B)  
+            # F = cholesky!(C)
+            # ldiv!(F, B)
             copyto!(temp_B_list[j, i, :, :], B)
 
 
@@ -147,12 +156,13 @@ function solve(
     # temp_A_list = data.temp_A_list
     temp_B_list = data.temp_B_list
 
-    ipiv = data.ipiv
     A = data.A
     B = data.B
     C = data.C
     D1 = data.D1
     D2 = data.D2
+
+    F = data.F
 
     @views for j = 1:P-1
 
@@ -199,8 +209,12 @@ function solve(
 
         copyto!(A, batch_A_list[j, 1, :, :])
         copyto!(D1, batch_d_list[j, 1, :])
-        LAPACK.getrf!(A, ipiv) #TODO 
-        LAPACK.getrs!('N', A, ipiv, D1) 
+        # LAPACK.getrf!(A, ipiv) #TODO 
+        # LAPACK.getrs!('N', A, ipiv, D1) 
+        # LAPACK.potrf!('U', A)
+        # LAPACK.potrs!('U', A, D1)
+        F = cholesky!(A)
+        ldiv!(F, D1)
         copyto!(batch_d_list[j, 1, :], D1)
     
         for i = 2:m
@@ -211,8 +225,12 @@ function solve(
             mul!(D2, B, D1, -1.0, 1.0)
             copyto!(A, batch_A_list[j, i, :, :])
             mul!(A, B, C, -1.0, 1.0)
-            LAPACK.getrf!(A, ipiv) #TODO
-            LAPACK.getrs!('N', A, ipiv, D2) 
+            # LAPACK.getrf!(A, ipiv) #TODO
+            # LAPACK.getrs!('N', A, ipiv, D2) 
+            LAPACK.potrf!('U', A)
+            LAPACK.potrs!('U', A, D2)
+            # F = cholesky!(A)
+            # ldiv!(F, D2)
             copyto!(batch_d_list[j, i, :], D2)
             copyto!(D1, batch_d_list[j, i, :])
     

@@ -12,15 +12,14 @@ m  = trunc(Int, (N - P) / (P - 1))
 #######################################
 A_list = zeros(N, n, n);
 for i = 1:N
-    temp = rand(Float64, n, n)
-    A_list[i, :, :] = temp * temp'
+    temp = randn(Float64, n, n)
+    A_list[i, :, :] = temp * temp' + n * I
 end
 
 B_list = zeros(N-1, n, n);
-zero_list = zeros(N-1, n, n);
 for i = 1:N-1
-    temp = rand(Float64, n, n)
-    B_list[i, :, :] = temp * temp'
+    temp = randn(Float64, n, n)
+    B_list[i, :, :] = temp
 end
 
 x_true = rand(N, n);
@@ -59,14 +58,14 @@ temp_A_list = deepcopy(batch_A_list);
 temp_B_list = deepcopy(batch_B_list);
 
 ##################################################################################################################################
-ipiv = Vector{LinearAlgebra.BlasInt}(undef, n);
 A = similar(temp_A_list, n, n);
 B = similar(temp_B_list, n, n);
 C = similar(temp_A_list, n, n);
 D1 = similar(temp_A_list, n);
 D2 = similar(temp_A_list, n);
+F = cholesky(Matrix{Float64}(I, n, n))
 
-data = TriDiagBlockData(N, m, n, P, 1:(m+1):N, A_list, B_list, batch_A_list, batch_B_list, temp_A_list, temp_B_list, MA, MB, MD, A, B, C, D1, D2, ipiv);
+data = TriDiagBlockData(N, m, n, P, 1:(m+1):N, A_list, B_list, batch_A_list, batch_B_list, temp_A_list, temp_B_list, MA, MB, MD, A, B, C, D1, D2, F);
 
 @time factorize!(data)
 
