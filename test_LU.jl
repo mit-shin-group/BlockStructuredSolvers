@@ -48,8 +48,8 @@ end
 
 
 # Initialize storage for Cholesky factors
-L_list = zeros(N, n, n)
-L_B_list = zeros(N-1, n, n)
+L_list = zeros(N, n, n);
+L_B_list = zeros(N-1, n, n);
 
 # Compute Cholesky factor for first block
 L_list[1, :, :] = cholesky(A_list[1, :, :]).L
@@ -65,3 +65,27 @@ for i = 2:N
     # Compute Cholesky factor for current block
     L_list[i, :, :] = cholesky(Schur_complement).L
 end
+
+# Initialize storage for Cholesky factors
+U_list = zeros(N, n, n);
+U_B_list = zeros(N-1, n, n);
+
+# Compute Cholesky factor for first block
+U_list[1, :, :] = cholesky(A_list[1, :, :]).U
+
+# Iterate over remaining blocks
+for i = 2:N
+    # Solve for L_{i, i-1}
+    U_B_list[i-1, :, :] = inv(U_list[i-1, :, :]') * B_list[i-1, :, :]
+
+    # Compute Schur complement
+    Schur_complement = A_list[i, :, :] - U_B_list[i-1, :, :]' * U_B_list[i-1, :, :]
+
+    # Compute Cholesky factor for current block
+    U_list[i, :, :] = cholesky(Schur_complement).U
+
+end
+
+temp = cholesky(M).U;
+temp[end-15:end, end-15:end]
+U_list[end, :, :]
