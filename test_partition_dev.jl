@@ -4,9 +4,9 @@ import Pkg
 include("TriDiagBlock.jl")
 import .TriDiagBlock: TriDiagBlockData, factorize, solve
 
-N = 97 # number of diagonal blocks
-n = 8 # size of each block
-P = 17 # number of separators
+N = 17 # number of diagonal blocks
+n = 5 # size of each block
+P = 5 # number of separators
 m  = trunc(Int, (N - P) / (P - 1))
 
 #######################################
