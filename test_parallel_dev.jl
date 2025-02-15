@@ -84,10 +84,10 @@ end
 
 
 ######
-# x_list = zeros(N, n);
+x_list = zeros(N, n);
 # x_separator_sol = inv(MD - MB' * inv(MA) * MB) * (u - MB' * inv(MA) * v);
 
-x_list[I_separator, :] = reshape(x_separator_sol, n, P)';
+# x_list[I_separator, :] = reshape(x_separator_sol, n, P)';
 
 
 
@@ -307,3 +307,5 @@ for i = 1:P-1
     
 
 end
+
+x_list - x_true
