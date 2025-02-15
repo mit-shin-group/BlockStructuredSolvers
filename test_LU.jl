@@ -1,13 +1,12 @@
 using LinearAlgebra
+using BenchmarkTools
 
 import Pkg
 include("TriDiagBlock.jl")
 import .TriDiagBlock: TriDiagBlockData, factorize!, solve
 
-N = 96 # number of diagonal blocks
-n = 5 # size of each block
-P = 17 # number of separators
-m  = trunc(Int, (N - P) / (P - 1))
+N = 15 # number of diagonal blocks
+n = 16 # size of each block
 
 #######################################
 A_list = zeros(N, n, n);
@@ -70,39 +69,81 @@ end
 U_list = zeros(N, n, n);
 U_B_list = zeros(N-1, n, n);
 
-# Compute Cholesky factor for first block
-U_list[1, :, :] = cholesky(A_list[1, :, :]).U
+# # Compute Cholesky factor for first block
+# U_list[1, :, :] = cholesky(A_list[1, :, :]).U
 
-# Iterate over remaining blocks
-for i = 2:N
-    # Solve for L_{i, i-1}
-    U_B_list[i-1, :, :] = U_list[i-1, :, :]' \  B_list[i-1, :, :]
+# # Iterate over remaining blocks
+# for i = 2:N
+#     # Solve for L_{i, i-1}
+#     U_B_list[i-1, :, :] = U_list[i-1, :, :]' \  B_list[i-1, :, :]
 
-    # Compute Schur complement
-    Schur_complement = A_list[i, :, :] - U_B_list[i-1, :, :]' * U_B_list[i-1, :, :]
+#     # Compute Schur complement
+#     Schur_complement = A_list[i, :, :] - U_B_list[i-1, :, :]' * U_B_list[i-1, :, :]
 
-    # Compute Cholesky factor for current block
-    U_list[i, :, :] = cholesky(Schur_complement).U
+#     # Compute Cholesky factor for current block
+#     U_list[i, :, :] = cholesky(Schur_complement).U
 
-end
+# end
 
 # temp = cholesky(M).U;
 # temp[end-15:end, end-15:end]
 # U_list[end, :, :]
 
-invA = zeros(N * n, N * n);
+invA = UpperTriangular(zeros(N * n, N * n));
 
-for i = 1:N
+# for i = 1:N
 
-    invA[(i-1)*n+1:i*n, (i-1)*n +1:i*n] = U_list[i, :, :] \ I
+#     invA[(i-1)*n+1:i*n, (i-1)*n +1:i*n] = U_list[i, :, :] \ I
 
-    for level = 1:N-1
+#     for level = 1:N-1
 
-        for j = 1:N-level
+#         for j = 1:N-level
 
-            temp = -U_B_list[j, :, :] * invA[(j)*n+1:(j+1)*n, (j+level-1)*n+1:(j+level)*n]
-            temp = invA[(j-1)*n+1:(j)*n, (j-1)*n+1:(j)*n] * temp
-            invA[(j-1)*n+1:j*n, (j+level-1)*n +1:(j+level-1)*n+n] = temp
+#             temp = -U_B_list[j, :, :] * invA[(j)*n+1:(j+1)*n, (j+level-1)*n+1:(j+level)*n]
+#             temp = invA[(j-1)*n+1:(j)*n, (j-1)*n+1:(j)*n] * temp
+#             invA[(j-1)*n+1:j*n, (j+level-1)*n +1:(j+level-1)*n+n] = temp
+
+#         end
+
+#     end
+
+# end
+
+
+invA = UpperTriangular(zeros(N * n, N * n));
+A = zeros(n, n)
+
+function inverse_cholesky_factorize(A_list, B_list, U_list, U_B_list, invA, A, N, n)
+
+    copyto!(A, @view A_list[1, :, :])
+    U_list[1, :, :] = cholesky!(A).U
+
+    # Iterate over remaining blocks
+    for i = 2:N
+        # Solve for L_{i, i-1}
+        U_B_list[i-1, :, :] = U_list[i-1, :, :]' \  B_list[i-1, :, :]
+
+        # Compute Schur complement
+        Schur_complement = A_list[i, :, :] - U_B_list[i-1, :, :]' * U_B_list[i-1, :, :]
+
+        # Compute Cholesky factor for current block
+        U_list[i, :, :] = cholesky(Schur_complement).U
+
+    end
+
+    for i = 1:N
+
+        invA[(i-1)*n+1:i*n, (i-1)*n +1:i*n] = U_list[i, :, :] \ I
+
+        for level = 1:N-1
+
+            for j = 1:N-level
+
+                temp = -U_B_list[j, :, :] * invA[(j)*n+1:(j+1)*n, (j+level-1)*n+1:(j+level)*n]
+                temp = invA[(j-1)*n+1:(j)*n, (j-1)*n+1:(j)*n] * temp
+                invA[(j-1)*n+1:j*n, (j+level-1)*n +1:(j+level-1)*n+n] = temp
+
+            end
 
         end
 
@@ -110,4 +151,7 @@ for i = 1:N
 
 end
 
-inv(cholesky(M).U) - invA
+@time inverse_cholesky_factorize(A_list, B_list, U_list, U_B_list, invA, A, N, n)
+
+
+norm(inv(cholesky(M).U) - invA)
