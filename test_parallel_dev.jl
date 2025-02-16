@@ -33,6 +33,16 @@ for i = 2:N-1
 end
 
 d_list[N, :] = B_list[N-1, :, :]' * x_true[N-1, :] + A_list[N, :, :] * x_true[N, :];
+
+d = zeros(N * n);
+
+@views for i = 1:N
+    
+        d[(i-1)*n+1:i*n] = d_list[i, :]
+
+end
+
+# d = reshape(d_list', N * n);
 #################################################################
 
 I_separator = 1:(m+1):N
@@ -68,9 +78,11 @@ v = zeros((P-1) * m * n)
 
 @views for j = 1:P-1
 
-    for i = 1:m
-        v[(j-1)*m*n+(i-1)*n+1:(j-1)*m*n+i*n] = d_list[I_separator[j]+i, :]
-    end
+    # for i = 1:m
+    #     v[(j-1)*m*n+(i-1)*n+1:(j-1)*m*n+i*n] = d_list[I_separator[j]+i, :]
+    # end
+
+    v[(j-1)*m*n+1:j*m*n] = d[I_separator[j]*n+1:I_separator[j+1]*n-n]
 
 end
 ####################################
@@ -78,7 +90,8 @@ u = zeros(P * n)
 
 @views for j = 1:P
 
-    u[(j-1)*n+1:j*n] = d_list[I_separator[j], :]
+    # u[(j-1)*n+1:j*n] = d_list[I_separator[j], :]
+    u[(j-1)*n+1:j*n] = d[I_separator[j]*n-n+1:I_separator[j]*n, :]
 
 end
 
@@ -276,29 +289,36 @@ C = similar(A_list, n, n)
 D1 = similar(A_list, n)
 D2 = similar(A_list, n)
 
+#d[I_separator[j]*n-n+1:I_separator[j]*n, :]
+
 @views for j = 1:P-1
-    copyto!(D1, d_list[I_separator[j]+1, :])
+    copyto!(D1, v[I_separator[j]*n-j*n+1:I_separator[j]*n-j*n+n])
+    # copyto!(D1, d_list[I_separator[j]+1, :])
     copyto!(B, B_list[I_separator[j], :, :]')
     copyto!(D2, x_list[I_separator[j], :])
     mul!(D1, B, D2, -1.0, 1.0)
-    copyto!(d_list[I_separator[j]+1, :], D1)
+    # copyto!(d_list[I_separator[j]+1, :], D1)
+    copyto!(v[I_separator[j]*n-j*n+1:I_separator[j]*n-j*n+n], D1)
 
-    copyto!(D1, d_list[I_separator[j+1]-1, :])
+    copyto!(D1, v[I_separator[j+1]*n-n-n-j*n+1:I_separator[j+1]*n-j*n-n])
+    # copyto!(D1, d_list[I_separator[j+1]-1, :])
     copyto!(B, B_list[I_separator[j+1]-1, :, :])
     copyto!(D2, x_list[I_separator[j+1], :])
     mul!(D1, B, D2, -1.0, 1.0)
-    copyto!(d_list[I_separator[j+1]-1, :], D1)
-end
-
-v = zeros((P-1) * m * n)
-
-@views for j = 1:P-1
-
-    for i = 1:m
-        v[(j-1)*m*n+(i-1)*n+1:(j-1)*m*n+i*n] = d_list[I_separator[j]+i, :]
-    end
+    # copyto!(d_list[I_separator[j+1]-1, :], D1)
+    copyto!(v[I_separator[j+1]*n-n-n-j*n+1:I_separator[j+1]*n-n-j*n], D1)
 
 end
+
+# v = zeros((P-1) * m * n)
+
+# @views for j = 1:P-1
+
+#     for i = 1:m
+#         v[(j-1)*m*n+(i-1)*n+1:(j-1)*m*n+i*n] = d_list[I_separator[j]+i, :]
+#     end
+
+# end
 
 temp = zeros(m*n);
 for i = 1:P-1
