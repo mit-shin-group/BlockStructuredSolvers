@@ -51,10 +51,10 @@ I_separator = 1:(m+1):N
 
 ####################################################################
 # MA = zeros((P-1) * m * n, (P-1) * m * n);
-MB = zeros((P-1) * m * n, P * n);
+# MB = zeros((P-1) * m * n, P * n);
 # MD = zeros(P * n, P * n);
 
-@views for j = 1:P-1 #convert to while
+# @views for j = 1:P-1 #convert to while
     # MA[(j-1)*m*n+1:(j-1)*m*n+n, (j-1)*m*n+1:(j-1)*m*n+n] = A_list[I_separator[j]+1, :, :]
     # MA[(j-1)*m*n+1:(j-1)*m*n+n, (j-1)*m*n+1+n:(j-1)*m*n+n+n] = B_list[I_separator[j]+1, :, :]
     # for i = 2:m-1
@@ -65,9 +65,9 @@ MB = zeros((P-1) * m * n, P * n);
     # MA[(j-1)*m*n+(m-1)*n+1:(j-1)*m*n+m*n, (j-1)*m*n+(m-2)*n+1:(j-1)*m*n+(m-1)*n] = B_list[I_separator[j]+m-1, :, :]'
     # MA[(j-1)*m*n+(m-1)*n+1:(j-1)*m*n+m*n, (j-1)*m*n+(m-1)*n+1:(j-1)*m*n+m*n] = A_list[I_separator[j]+m, :, :]
 
-    MB[(j-1)*m*n+1:(j-1)*m*n+n, (j-1)*n+1:(j-1)*n+n] = B_list[I_separator[j], :, :]'
-    MB[j*m*n-n+1:j*m*n, (j-1)*n+n+1:(j-1)*n+n+n] = B_list[I_separator[j+1]-1, :, :]
-end
+#     MB[(j-1)*m*n+1:(j-1)*m*n+n, (j-1)*n+1:(j-1)*n+n] = B_list[I_separator[j], :, :]'
+#     MB[j*m*n-n+1:j*m*n, (j-1)*n+n+1:(j-1)*n+n+n] = B_list[I_separator[j+1]-1, :, :]
+# end
 
 # @views for j = 1:P
 
@@ -251,13 +251,13 @@ end
 # temp1 = deepcopy(temp)
 
 ##############################
-temp = zeros(P*n, P*n);
+LHS = zeros(P*n, P*n);
 invMA_list = zeros(P-1, m*n, m*n);
 
 U_list = zeros(m, n, n);
 U_B_list = zeros(m-1, n, n);
 invU = UpperTriangular(zeros(m * n, m * n));
-A = zeros(n, n)
+A = zeros(n, n);
 
 @views for i = 1:P-1
 
@@ -266,42 +266,49 @@ A = zeros(n, n)
     invMA = invU * invU';
     invMA_list[i, :, :] = invMA
 
-    temp -= MB[(i-1)*m*n+1:i*m*n, :]' * invMA * MB[(i-1)*m*n+1:i*m*n, :]
+    # LHS -= MB[(i-1)*m*n+1:i*m*n, :]' * invMA * MB[(i-1)*m*n+1:i*m*n, :]
+
+    LHS[(i-1)*n+1:(i-1)*n+n, (i-1)*n+1:(i-1)*n+n] -= B_list[I_separator[i], :, :] * invMA[1:n, 1:n] *  B_list[I_separator[i], :, :]'
+    LHS[(i-1)*n+n+1:(i-1)*n+n+n, (i-1)*n+n+1:(i-1)*n+n+n] -= B_list[I_separator[i+1]-1, :, :]' * invMA[m*n-n+1:m*n, m*n-n+1:m*n] * B_list[I_separator[i+1]-1, :, :]
+    LHS[(i-1)*n+1:(i-1)*n+n, (i-1)*n+n+1:(i-1)*n+n+n] -= B_list[I_separator[i], :, :] * invMA[1:n, m*n-n+1:m*n] *  B_list[I_separator[i+1]-1, :, :]
+    LHS[(i-1)*n+n+1:(i-1)*n+n+n, (i-1)*n+1:(i-1)*n+n] -= (B_list[I_separator[i], :, :] * invMA[1:n, m*n-n+1:m*n] *  B_list[I_separator[i+1]-1, :, :])'
 
 end
 
 @views for j = 1:P
 
-    temp[(j-1)*n+1:j*n, (j-1)*n+1:j*n] += A_list[I_separator[j], :, :]
+    LHS[(j-1)*n+1:j*n, (j-1)*n+1:j*n] += A_list[I_separator[j], :, :]
 
 end
 
 # temp = MD - temp;
 
-F = cholesky!(Hermitian(temp))
+F = cholesky!(Hermitian(LHS))
 
-temp = zeros(P * n)
+RHS = zeros(P * n)
 
 @views for j = 1:P
 
     # u[(j-1)*n+1:j*n] = d_list[I_separator[j], :]
-    temp[(j-1)*n+1:j*n] = d[I_separator[j]*n-n+1:I_separator[j]*n, :] # d_list[I_separator[j], :]
+    RHS[(j-1)*n+1:j*n] = d[I_separator[j]*n-n+1:I_separator[j]*n, :] # d_list[I_separator[j], :]
 
 end
 
-for i = 1:P-1
+@views for i = 1:P-1
 
-    temp -= MB[(i-1)*m*n+1:i*m*n, :]' * invMA_list[i, :, :] * d[I_separator[i]*n+1:I_separator[i+1]*n-n] # v[(i-1)*m*n+1:i*m*n]
+    # RHS2 -= MB[(i-1)*m*n+1:i*m*n, :]' * invMA_list[i, :, :] * d[I_separator[i]*n+1:I_separator[i+1]*n-n] # v[(i-1)*m*n+1:i*m*n]
+    RHS[(i-1)*n+1:(i-1)*n+n] -= B_list[I_separator[i], :, :] * invMA_list[i, :, :][1:n, :] * d[I_separator[i]*n+1:I_separator[i+1]*n-n]
+    RHS[(i-1)*n+n+1:(i-1)*n+n+n] -= B_list[I_separator[i+1]-1, :, :]' * invMA_list[i, :, :][m*n-n+1:m*n, :] * d[I_separator[i]*n+1:I_separator[i+1]*n-n]
 
 end
 
-ldiv!(F, temp)
+ldiv!(F, RHS)
 
 x = zeros(N * n);
 
 @views for i = 1:P
 
-    x[I_separator[i]*n-n+1:I_separator[i]*n] = temp[(i-1)*n+1:i*n]
+    x[I_separator[i]*n-n+1:I_separator[i]*n] = RHS[(i-1)*n+1:i*n]
 
 end
 
@@ -346,7 +353,7 @@ end
 
 # end
 
-for i = 1:P-1
+@views for i = 1:P-1
 
     x[I_separator[i]*n+1:I_separator[i+1]*n-n] = invMA_list[i, :, :] *  d[I_separator[i]*n+1:I_separator[i+1]*n-n]
     # x_list[I_separator[i]+1:I_separator[i]+m, :] = reshape(invMA_list[i, :, :] *  d[I_separator[i]*n+1:I_separator[i+1]*n-n],n,m)'
