@@ -48,52 +48,52 @@ end
 I_separator = 1:(m+1):N
 
 ####################################################################
-MA = zeros((P-1) * m * n, (P-1) * m * n);
+# MA = zeros((P-1) * m * n, (P-1) * m * n);
 MB = zeros((P-1) * m * n, P * n);
-MD = zeros(P * n, P * n);
+# MD = zeros(P * n, P * n);
 
 @views for j = 1:P-1 #convert to while
-    MA[(j-1)*m*n+1:(j-1)*m*n+n, (j-1)*m*n+1:(j-1)*m*n+n] = A_list[I_separator[j]+1, :, :]
-    MA[(j-1)*m*n+1:(j-1)*m*n+n, (j-1)*m*n+1+n:(j-1)*m*n+n+n] = B_list[I_separator[j]+1, :, :]
-    for i = 2:m-1
-        MA[(j-1)*m*n+(i-1)*n+1:(j-1)*m*n+i*n, (j-1)*m*n+(i-2)*n+1:(j-1)*m*n+(i-1)*n] = B_list[I_separator[j]+i-1, :, :]'
-        MA[(j-1)*m*n+(i-1)*n+1:(j-1)*m*n+i*n, (j-1)*m*n+(i)*n+1:(j-1)*m*n+(i+1)*n] = B_list[I_separator[j]+i, :, :]
-        MA[(j-1)*m*n+(i-1)*n+1:(j-1)*m*n+i*n, (j-1)*m*n+(i-1)*n+1:(j-1)*m*n+i*n] = A_list[I_separator[j]+i, :, :]
-    end
-    MA[(j-1)*m*n+(m-1)*n+1:(j-1)*m*n+m*n, (j-1)*m*n+(m-2)*n+1:(j-1)*m*n+(m-1)*n] = B_list[I_separator[j]+m-1, :, :]'
-    MA[(j-1)*m*n+(m-1)*n+1:(j-1)*m*n+m*n, (j-1)*m*n+(m-1)*n+1:(j-1)*m*n+m*n] = A_list[I_separator[j]+m, :, :]
+    # MA[(j-1)*m*n+1:(j-1)*m*n+n, (j-1)*m*n+1:(j-1)*m*n+n] = A_list[I_separator[j]+1, :, :]
+    # MA[(j-1)*m*n+1:(j-1)*m*n+n, (j-1)*m*n+1+n:(j-1)*m*n+n+n] = B_list[I_separator[j]+1, :, :]
+    # for i = 2:m-1
+    #     MA[(j-1)*m*n+(i-1)*n+1:(j-1)*m*n+i*n, (j-1)*m*n+(i-2)*n+1:(j-1)*m*n+(i-1)*n] = B_list[I_separator[j]+i-1, :, :]'
+    #     MA[(j-1)*m*n+(i-1)*n+1:(j-1)*m*n+i*n, (j-1)*m*n+(i)*n+1:(j-1)*m*n+(i+1)*n] = B_list[I_separator[j]+i, :, :]
+    #     MA[(j-1)*m*n+(i-1)*n+1:(j-1)*m*n+i*n, (j-1)*m*n+(i-1)*n+1:(j-1)*m*n+i*n] = A_list[I_separator[j]+i, :, :]
+    # end
+    # MA[(j-1)*m*n+(m-1)*n+1:(j-1)*m*n+m*n, (j-1)*m*n+(m-2)*n+1:(j-1)*m*n+(m-1)*n] = B_list[I_separator[j]+m-1, :, :]'
+    # MA[(j-1)*m*n+(m-1)*n+1:(j-1)*m*n+m*n, (j-1)*m*n+(m-1)*n+1:(j-1)*m*n+m*n] = A_list[I_separator[j]+m, :, :]
 
     MB[(j-1)*m*n+1:(j-1)*m*n+n, (j-1)*n+1:(j-1)*n+n] = B_list[I_separator[j], :, :]'
     MB[j*m*n-n+1:j*m*n, (j-1)*n+n+1:(j-1)*n+n+n] = B_list[I_separator[j+1]-1, :, :]
 end
 
-@views for j = 1:P
+# @views for j = 1:P
 
-    MD[(j-1)*n+1:j*n, (j-1)*n+1:j*n] = A_list[I_separator[j], :, :]
+#     MD[(j-1)*n+1:j*n, (j-1)*n+1:j*n] = A_list[I_separator[j], :, :]
 
-end
+# end
 
 ##################
-v = zeros((P-1) * m * n)
+# v = zeros((P-1) * m * n)
 
-@views for j = 1:P-1
+# @views for j = 1:P-1
 
-    # for i = 1:m
-    #     v[(j-1)*m*n+(i-1)*n+1:(j-1)*m*n+i*n] = d_list[I_separator[j]+i, :]
-    # end
+#     # for i = 1:m
+#     #     v[(j-1)*m*n+(i-1)*n+1:(j-1)*m*n+i*n] = d_list[I_separator[j]+i, :]
+#     # end
 
-    v[(j-1)*m*n+1:j*m*n] = d[I_separator[j]*n+1:I_separator[j+1]*n-n]
+#     v[(j-1)*m*n+1:j*m*n] = d[I_separator[j]*n+1:I_separator[j+1]*n-n]
 
-end
+# end
 ####################################
-u = zeros(P * n)
+# u = zeros(P * n)
 
-@views for j = 1:P
+# @views for j = 1:P
 
-    # u[(j-1)*n+1:j*n] = d_list[I_separator[j], :]
-    u[(j-1)*n+1:j*n] = d[I_separator[j]*n-n+1:I_separator[j]*n, :]
+#     # u[(j-1)*n+1:j*n] = d_list[I_separator[j], :]
+#     u[(j-1)*n+1:j*n] = d[I_separator[j]*n-n+1:I_separator[j]*n, :]
 
-end
+# end
 
 
 ######
@@ -249,7 +249,7 @@ end
 # temp1 = deepcopy(temp)
 
 ##############################
-temp = zeros(size(MD));
+temp = zeros(P*n, P*n);
 invMA_list = zeros(P-1, m*n, m*n);
 
 U_list = zeros(m, n, n);
@@ -264,22 +264,44 @@ for i = 1:P-1
     invMA = invU * invU';
     invMA_list[i, :, :] = invMA
 
-    temp += MB[(i-1)*m*n+1:i*m*n, :]' * invMA * MB[(i-1)*m*n+1:i*m*n, :]
+    temp -= MB[(i-1)*m*n+1:i*m*n, :]' * invMA * MB[(i-1)*m*n+1:i*m*n, :]
 
 end
 
-temp = MD - temp;
+@views for j = 1:P
+
+    temp[(j-1)*n+1:j*n, (j-1)*n+1:j*n] += A_list[I_separator[j], :, :]
+
+end
+
+# temp = MD - temp;
 
 F = cholesky!(Hermitian(temp))
 
-temp = u;
+temp = zeros(P * n)
+
+@views for j = 1:P
+
+    # u[(j-1)*n+1:j*n] = d_list[I_separator[j], :]
+    temp[(j-1)*n+1:j*n] = d[I_separator[j]*n-n+1:I_separator[j]*n, :] # d_list[I_separator[j], :]
+
+end
+
 for i = 1:P-1
 
-    temp -= MB[(i-1)*m*n+1:i*m*n, :]' * invMA_list[i, :, :] * v[(i-1)*m*n+1:i*m*n]
+    temp -= MB[(i-1)*m*n+1:i*m*n, :]' * invMA_list[i, :, :] * d[I_separator[i]*n+1:I_separator[i+1]*n-n] # v[(i-1)*m*n+1:i*m*n]
 
 end
 
 ldiv!(F, temp)
+
+x = zeros(N * n);
+
+@views for i = 1:P
+
+    x[I_separator[i]*n-n+1:I_separator[i]*n] = temp[(i-1)*n+1:i*n]
+
+end
 
 x_list[I_separator, :] = reshape(temp, n, P)';
 
@@ -292,21 +314,23 @@ D2 = similar(A_list, n)
 #d[I_separator[j]*n-n+1:I_separator[j]*n, :]
 
 @views for j = 1:P-1
-    copyto!(D1, v[I_separator[j]*n-j*n+1:I_separator[j]*n-j*n+n])
+    copyto!(D1, d[I_separator[j]*n+1:I_separator[j]*n+n])
     # copyto!(D1, d_list[I_separator[j]+1, :])
     copyto!(B, B_list[I_separator[j], :, :]')
-    copyto!(D2, x_list[I_separator[j], :])
+    copyto!(D2, x[I_separator[j]*n-n+1:I_separator[j]*n])
+    # copyto!(D2, x_list[I_separator[j], :])
     mul!(D1, B, D2, -1.0, 1.0)
     # copyto!(d_list[I_separator[j]+1, :], D1)
-    copyto!(v[I_separator[j]*n-j*n+1:I_separator[j]*n-j*n+n], D1)
+    copyto!(d[I_separator[j]*n+1:I_separator[j]*n+n], D1)
 
-    copyto!(D1, v[I_separator[j+1]*n-n-n-j*n+1:I_separator[j+1]*n-j*n-n])
+    copyto!(D1, d[I_separator[j+1]*n-n-n+1:I_separator[j+1]*n-n])
     # copyto!(D1, d_list[I_separator[j+1]-1, :])
     copyto!(B, B_list[I_separator[j+1]-1, :, :])
-    copyto!(D2, x_list[I_separator[j+1], :])
+    # copyto!(D2, x_list[I_separator[j+1], :])
+    copyto!(D2, x[I_separator[j+1]*n-n+1:I_separator[j+1]*n])
     mul!(D1, B, D2, -1.0, 1.0)
     # copyto!(d_list[I_separator[j+1]-1, :], D1)
-    copyto!(v[I_separator[j+1]*n-n-n-j*n+1:I_separator[j+1]*n-n-j*n], D1)
+    copyto!(d[I_separator[j+1]*n-n-n+1:I_separator[j+1]*n-n], D1)
 
 end
 
@@ -323,7 +347,8 @@ end
 temp = zeros(m*n);
 for i = 1:P-1
 
-    x_list[I_separator[i]+1:I_separator[i]+m, :] = reshape(invMA_list[i, :, :] * v[(i-1)*m*n+1:i*m*n],n,m)'
+    x[I_separator[i]*n+1:I_separator[i+1]*n-n] = invMA_list[i, :, :] *  d[I_separator[i]*n+1:I_separator[i+1]*n-n]
+    # x_list[I_separator[i]+1:I_separator[i]+m, :] = reshape(invMA_list[i, :, :] *  d[I_separator[i]*n+1:I_separator[i+1]*n-n],n,m)'
     
 
 end
