@@ -26,7 +26,7 @@ x_true = rand(N, n);
 d_list = zeros(N, n);
 d_list[1, :] = A_list[1, :, :] * x_true[1, :] + B_list[1, :, :] * x_true[2, :];
 
-for i = 2:N-1
+@views for i = 2:N-1
 
     d_list[i, :] = B_list[i-1, :, :]' * x_true[i-1, :] + A_list[i, :, :] * x_true[i, :] + B_list[i, :, :] * x_true[i+1, :];
 
@@ -38,9 +38,11 @@ d = zeros(N * n);
 
 @views for i = 1:N
     
-        d[(i-1)*n+1:i*n] = d_list[i, :]
+    d[(i-1)*n+1:i*n] = d_list[i, :]
 
 end
+
+x_true = reshape(x_true', N*n);
 
 # d = reshape(d_list', N * n);
 #################################################################
@@ -97,7 +99,7 @@ end
 
 
 ######
-x_list = zeros(N, n);
+# x_list = zeros(N, n);
 # x_separator_sol = inv(MD - MB' * inv(MA) * MB) * (u - MB' * inv(MA) * v);
 
 # x_list[I_separator, :] = reshape(x_separator_sol, n, P)';
@@ -257,7 +259,7 @@ U_B_list = zeros(m-1, n, n);
 invU = UpperTriangular(zeros(m * n, m * n));
 A = zeros(n, n)
 
-for i = 1:P-1
+@views for i = 1:P-1
 
     inverse_cholesky_factorize(A_list[I_separator[i]+1:I_separator[i]+m, :, :], B_list[I_separator[i]+1:I_separator[i]+m-1, :, :], U_list, U_B_list, invU, A, m, n)
 
@@ -303,7 +305,7 @@ x = zeros(N * n);
 
 end
 
-x_list[I_separator, :] = reshape(temp, n, P)';
+# x_list[I_separator, :] = reshape(temp, n, P)';
 
 A = similar(A_list, n, n)
 B = similar(A_list, n, n)
@@ -344,7 +346,6 @@ end
 
 # end
 
-temp = zeros(m*n);
 for i = 1:P-1
 
     x[I_separator[i]*n+1:I_separator[i+1]*n-n] = invMA_list[i, :, :] *  d[I_separator[i]*n+1:I_separator[i+1]*n-n]
@@ -353,4 +354,4 @@ for i = 1:P-1
 
 end
 
-x_list - x_true
+x - x_true
