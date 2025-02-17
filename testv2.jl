@@ -63,8 +63,11 @@ invLHS_chol = UpperTriangular(zeros(P*n, P*n));
 A = similar(A_list, n, n);
 B = similar(A_list, n, n);
 C = similar(A_list, n, n);
-D1 = similar(A_list, n);
+D = similar(A_list, n, m*n);
+
+D1 = similar(A_list, m*n);
 D2 = similar(A_list, n);
+D3 = similar(A_list, n);
 
 F1 = cholesky(Matrix{Float64}(I, n, n))
 L1 = LowerTriangular(zeros(n, n));
@@ -96,6 +99,7 @@ data = TriDiagBlockDatav2(
     A,
     B,
     C,
+    D,
     L1,
     U1,
     L2,
@@ -103,7 +107,8 @@ data = TriDiagBlockDatav2(
     F1,
     F2,
     D1,
-    D2
+    D2,
+    D3
     );
 
 @time factorize(data);
@@ -113,4 +118,4 @@ x = zeros(N * n);
 
 @time solve(data, d, RHS, x)
 
-x - x_true
+norm(x - x_true)

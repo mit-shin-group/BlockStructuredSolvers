@@ -41,6 +41,7 @@ struct TriDiagBlockDatav2{
     A::MS
     B::MS
     C::MS
+    D::MS
 
     L1::LowerTriangular{T, MS}
     U1::UpperTriangular{T, MS}
@@ -52,6 +53,7 @@ struct TriDiagBlockDatav2{
 
     D1::MU
     D2::MU
+    D3::MU
 
 end
 
@@ -251,8 +253,10 @@ invLHS_chol = data.invLHS_chol
 A = data.A
 B = data.B
 C = data.C
+D = data.D
 D1 = data.D1
 D2 = data.D2
+D3 = data.D3
 
 @views for j = 1:P
 
@@ -262,8 +266,29 @@ end
 
 @views for i = 1:P-1
 
-    RHS[(i-1)*n+1:(i-1)*n+n] -= B_list[I_separator[i], :, :] * invMA_list[i, :, :][1:n, :] * d[I_separator[i]*n+1:I_separator[i+1]*n-n]
-    RHS[(i-1)*n+n+1:(i-1)*n+n+n] -= B_list[I_separator[i+1]-1, :, :]' * invMA_list[i, :, :][m*n-n+1:m*n, :] * d[I_separator[i]*n+1:I_separator[i+1]*n-n]
+    D .= invMA_list[i, :, :][1:n, :]
+    B .= B_list[I_separator[i], :, :]
+
+    D1 .= d[I_separator[i]*n+1:I_separator[i+1]*n-n]
+    D3 .= RHS[(i-1)*n+1:(i-1)*n+n]
+
+    mul!(D2, D, D1)
+    BLAS.gemm!('N', 'N', -1.0, B, D2, 1.0, D3)
+
+    RHS[(i-1)*n+1:(i-1)*n+n] .= D3
+
+    D .= invMA_list[i, :, :][m*n-n+1:m*n, :]
+    B .= B_list[I_separator[i+1]-1, :, :]
+
+    D3 .= RHS[(i-1)*n+n+1:(i-1)*n+n+n]
+
+    mul!(D2, D, D1)
+    BLAS.gemm!('T', 'N', -1.0, B, D2, 1.0, D3)
+
+    RHS[(i-1)*n+n+1:(i-1)*n+n+n] .= D3
+
+    # RHS[(i-1)*n+1:(i-1)*n+n] -= B_list[I_separator[i], :, :] * invMA_list[i, :, :][1:n, :] * d[I_separator[i]*n+1:I_separator[i+1]*n-n]
+    # RHS[(i-1)*n+n+1:(i-1)*n+n+n] -= B_list[I_separator[i+1]-1, :, :]' * invMA_list[i, :, :][m*n-n+1:m*n, :] * d[I_separator[i]*n+1:I_separator[i+1]*n-n]
 
 end
 
@@ -278,17 +303,17 @@ lmul!(invLHS_chol, RHS)
 end
 
 @views for j = 1:P-1
-    copyto!(D1, d[I_separator[j]*n+1:I_separator[j]*n+n])
+    copyto!(D3, d[I_separator[j]*n+1:I_separator[j]*n+n])
     copyto!(B, B_list[I_separator[j], :, :]')
     copyto!(D2, x[I_separator[j]*n-n+1:I_separator[j]*n])
-    mul!(D1, B, D2, -1.0, 1.0)
-    copyto!(d[I_separator[j]*n+1:I_separator[j]*n+n], D1)
+    mul!(D3, B, D2, -1.0, 1.0)
+    copyto!(d[I_separator[j]*n+1:I_separator[j]*n+n], D3)
 
-    copyto!(D1, d[I_separator[j+1]*n-n-n+1:I_separator[j+1]*n-n])
+    copyto!(D3, d[I_separator[j+1]*n-n-n+1:I_separator[j+1]*n-n])
     copyto!(B, B_list[I_separator[j+1]-1, :, :])
     copyto!(D2, x[I_separator[j+1]*n-n+1:I_separator[j+1]*n])
-    mul!(D1, B, D2, -1.0, 1.0)
-    copyto!(d[I_separator[j+1]*n-n-n+1:I_separator[j+1]*n-n], D1)
+    mul!(D3, B, D2, -1.0, 1.0)
+    copyto!(d[I_separator[j+1]*n-n-n+1:I_separator[j+1]*n-n], D3)
 
 end
 
