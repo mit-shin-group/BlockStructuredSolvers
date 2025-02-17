@@ -42,6 +42,7 @@ struct TriDiagBlockDatav2{
     B::MS
     C::MS
     D::MS
+    E::MS
 
     L1::LowerTriangular{T, MS}
     U1::UpperTriangular{T, MS}
@@ -54,6 +55,7 @@ struct TriDiagBlockDatav2{
     D1::MU
     D2::MU
     D3::MU
+    D4::MU
 
 end
 
@@ -183,7 +185,7 @@ U2 = data.U2
         m, 
         n)
 
-    invMA_list[i, :, :] .= invMA;
+    invMA_list[i, :, :] .= invMA; #TODO how to store? invMA vs invMA_chol
 
     # LHS_A_list[i, :, :] -= B_list[I_separator[i], :, :] * invMA[1:n, 1:n] *  B_list[I_separator[i], :, :]'
     # LHS_A_list[i+1, :, :] -= B_list[I_separator[i+1]-1, :, :]' * invMA[m*n-n+1:m*n, m*n-n+1:m*n] * B_list[I_separator[i+1]-1, :, :]
@@ -254,13 +256,15 @@ A = data.A
 B = data.B
 C = data.C
 D = data.D
+E = data.E
 D1 = data.D1
 D2 = data.D2
 D3 = data.D3
+D4 = data.D4
 
 @views for j = 1:P
 
-    copyto!(RHS[(j-1)*n+1:j*n], d[I_separator[j]*n-n+1:I_separator[j]*n, :]) # d_list[I_separator[j], :]
+    RHS[(j-1)*n+1:j*n] .= d[I_separator[j]*n-n+1:I_separator[j]*n] # d_list[I_separator[j], :]
 
 end
 
@@ -298,7 +302,7 @@ lmul!(invLHS_chol, RHS)
 
 @views for i = 1:P
 
-    x[I_separator[i]*n-n+1:I_separator[i]*n] = RHS[(i-1)*n+1:i*n]
+    x[I_separator[i]*n-n+1:I_separator[i]*n] .= RHS[(i-1)*n+1:i*n]
 
 end
 
@@ -319,7 +323,16 @@ end
 
 @views for i = 1:P-1
 
-    x[I_separator[i]*n+1:I_separator[i+1]*n-n] = invMA_list[i, :, :] *  d[I_separator[i]*n+1:I_separator[i+1]*n-n]
+    D1 .= d[I_separator[i]*n+1:I_separator[i+1]*n-n]
+    D4 .= x[I_separator[i]*n+1:I_separator[i+1]*n-n]
+
+    E .= invMA_list[i, :, :]
+
+    mul!(D4, E, D1)
+
+    x[I_separator[i]*n+1:I_separator[i+1]*n-n] .= D4
+
+    # x[I_separator[i]*n+1:I_separator[i+1]*n-n] = invMA_list[i, :, :] *  d[I_separator[i]*n+1:I_separator[i+1]*n-n]
     
 end
 
