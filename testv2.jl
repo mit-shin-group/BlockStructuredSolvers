@@ -66,6 +66,14 @@ C = similar(A_list, n, n);
 D1 = similar(A_list, n);
 D2 = similar(A_list, n);
 
+F1 = cholesky(Matrix{Float64}(I, n, n))
+L1 = LowerTriangular(zeros(n, n));
+U1 = UpperTriangular(zeros(n, n));
+
+F2 = cholesky(Matrix{Float64}(I, n, n))
+L2 = LowerTriangular(zeros(n, n));
+U2 = UpperTriangular(zeros(n, n));
+
 data = TriDiagBlockDatav2(
     N, 
     m, 
@@ -88,6 +96,12 @@ data = TriDiagBlockDatav2(
     A,
     B,
     C,
+    L1,
+    U1,
+    L2,
+    U2,
+    F1,
+    F2,
     D1,
     D2
     );
@@ -98,3 +112,5 @@ RHS = zeros(P * n);
 x = zeros(N * n);
 
 @time solve(data, d, RHS, x)
+
+x - x_true

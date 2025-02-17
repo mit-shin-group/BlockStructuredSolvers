@@ -42,48 +42,84 @@ struct TriDiagBlockDatav2{
     B::MS
     C::MS
 
+    L1::LowerTriangular{T, MS}
+    U1::UpperTriangular{T, MS}
+    L2::LowerTriangular{T, MS}
+    U2::UpperTriangular{T, MS}
+
+    F1::Cholesky{T, Matrix{T}}
+    F2::Cholesky{T, Matrix{T}}
+
     D1::MU
     D2::MU
 
 end
 
-function inverse_cholesky_factorize(A_list, B_list, U_A_list, U_B_list, invM_chol, invM, A, N, n)
+function inverse_cholesky_factorize(A_list, B_list, U_A_list, U_B_list, invM_chol, invM, A, B, C, F, L, U, N, n)
 
     copyto!(A, @view A_list[1, :, :])
-    U_A_list[1, :, :] = cholesky!(Hermitian(A)).U
+    # U_A_list[1, :, :] = cholesky!(Hermitian(A)).U
+    F = cholesky!(Hermitian(A)) # TODO check F allocation
+    L .= F.L;
+    U .= F.U;
+
+    # invM_chol[1:n, 1:n] = U \ I
+    LAPACK.trtri!('U', 'N', U.data)
+    invM_chol[1:n, 1:n] .= U.data
 
     # Iterate over remaining blocks
-    for i = 2:N
+    @views for i = 2:N
         # Solve for L_{i, i-1}
-        U_B_list[i-1, :, :] = U_A_list[i-1, :, :]' \  B_list[i-1, :, :]
+        # U_B_list[i-1, :, :] = U_A_list[i-1, :, :]' \  B_list[i-1, :, :]
+        # U_B_list[i-1, :, :] = L \ B_list[i-1, :, :]
+        A .= B_list[i-1, :, :]
+        ldiv!(B, L, A)
+        U_B_list[i-1, :, :] .= B
+
+        A .= A_list[i, :, :]
 
         # Compute Schur complement
-        Schur_complement = A_list[i, :, :] - U_B_list[i-1, :, :]' * U_B_list[i-1, :, :]
+        BLAS.gemm!('T', 'N', -1.0, B, B, 1.0, A)
+
+        
+        # A .= A_list[i, :, :] - U_B_list[i-1, :, :]' * U_B_list[i-1, :, :]
 
         # Compute Cholesky factor for current block
-        U_A_list[i, :, :] = cholesky(Hermitian(Schur_complement)).U
+        F = cholesky!(Hermitian(A));
+        L .= F.L;
+        U .= F.U;
+
+        LAPACK.trtri!('U', 'N', U.data)
+        invM_chol[(i-1)*n+1:i*n, (i-1)*n +1:i*n] = U.data
 
     end
 
-    for i = 1:N
+    C .= A #TODO may delete
 
-        invM_chol[(i-1)*n+1:i*n, (i-1)*n +1:i*n] = U_A_list[i, :, :] \ I
+    @views for level = 1:N-1
 
-        for level = 1:N-1
+        for j = 1:N-level
 
-            for j = 1:N-level
+            B .=  - U_B_list[j, :, :]
+            A .= invM_chol[(j)*n+1:(j+1)*n, (j+level-1)*n+1:(j+level)*n]
 
-                temp = -U_B_list[j, :, :] * invM_chol[(j)*n+1:(j+1)*n, (j+level-1)*n+1:(j+level)*n]
-                temp = invM_chol[(j-1)*n+1:(j)*n, (j-1)*n+1:(j)*n] * temp
-                invM_chol[(j-1)*n+1:j*n, (j+level-1)*n +1:(j+level-1)*n+n] = temp
+            mul!(C, B, A)
+            
+            B .= invM_chol[(j-1)*n+1:(j)*n, (j-1)*n+1:(j)*n]
 
-            end
+            mul!(A, B, C)
+
+            invM_chol[(j-1)*n+1:j*n, (j+level-1)*n +1:(j+level-1)*n+n] .= A
+
+            # temp = - U_B_list[j, :, :] * invM_chol[(j)*n+1:(j+1)*n, (j+level-1)*n+1:(j+level)*n]
+            # temp = invM_chol[(j-1)*n+1:(j)*n, (j-1)*n+1:(j)*n] * temp
+            # invM_chol[(j-1)*n+1:j*n, (j+level-1)*n +1:(j+level-1)*n+n] = temp
 
         end
 
     end
 
-    copyto!(invM, Symmetric(invM_chol * invM_chol'))
+    invM .= Symmetric(invM_chol * invM_chol')
 
 end
 
@@ -119,6 +155,14 @@ A = data.A
 B = data.B
 C = data.C
 
+F1 = data.F1
+F2 = data.F2
+
+L1 = data.L1
+L2 = data.L2
+U1 = data.U1
+U2 = data.U2
+
 @views for i = 1:P-1
 
     inverse_cholesky_factorize(
@@ -128,22 +172,58 @@ C = data.C
         U_B_list, 
         invMA_chol,
         invMA,
-        A, 
+        A,
+        B,
+        C,
+        F1,
+        L1,
+        U1,
         m, 
         n)
 
-    invMA_list[i, :, :] = invMA;
+    invMA_list[i, :, :] .= invMA;
 
-    LHS_A_list[i, :, :] -= B_list[I_separator[i], :, :] * invMA[1:n, 1:n] *  B_list[I_separator[i], :, :]'
-    LHS_A_list[i+1, :, :] -= B_list[I_separator[i+1]-1, :, :]' * invMA[m*n-n+1:m*n, m*n-n+1:m*n] * B_list[I_separator[i+1]-1, :, :]
-    LHS_B_list[i, :, :] -= B_list[I_separator[i], :, :] * invMA[1:n, m*n-n+1:m*n] *  B_list[I_separator[i+1]-1, :, :]
-    LHS_A_list[i, :, :] += A_list[I_separator[i], :, :]
+    # LHS_A_list[i, :, :] -= B_list[I_separator[i], :, :] * invMA[1:n, 1:n] *  B_list[I_separator[i], :, :]'
+    # LHS_A_list[i+1, :, :] -= B_list[I_separator[i+1]-1, :, :]' * invMA[m*n-n+1:m*n, m*n-n+1:m*n] * B_list[I_separator[i+1]-1, :, :]
+    # LHS_B_list[i, :, :] -= B_list[I_separator[i], :, :] * invMA[1:n, m*n-n+1:m*n] *  B_list[I_separator[i+1]-1, :, :]
+    # LHS_A_list[i, :, :] += A_list[I_separator[i], :, :]
+
+    LHS_A_i = view(LHS_A_list, i, :, :)
+    LHS_A_i1 = view(LHS_A_list, i+1, :, :)
+    LHS_B_i = view(LHS_B_list, i, :, :)
+    
+    B_i = view(B_list, I_separator[i], :, :)
+    B_i1 = view(B_list, I_separator[i+1]-1, :, :)
+
+    invMA_1n = view(invMA, 1:n, 1:n)
+    invMA_mn = view(invMA, m*n-n+1:m*n, m*n-n+1:m*n)
+    invMA_1m = view(invMA, 1:n, m*n-n+1:m*n)
+
+    A_i = view(A_list, I_separator[i], :, :)
+
+    # Temporary storage for intermediate multiplications (to avoid new allocations)
+    tmp1 = similar(LHS_A_i) 
+    tmp2 = similar(LHS_A_i1)
+    tmp3 = similar(LHS_B_i)
+
+    # Compute B * invMA * B' in-place
+    mul!(tmp1, B_i, invMA_1n)    # tmp1 = B * invMA_1n
+    mul!(tmp2, B_i1', invMA_mn)  # tmp2 = B' * invMA_mn
+    mul!(tmp3, B_i, invMA_1m)    # tmp3 = B * invMA_1m
+
+    # Apply the updates in place
+    mul!(LHS_A_i, tmp1, B_i', -1, 1)  # LHS_A_list[i] -= tmp1 * B'
+    mul!(LHS_A_i1, tmp2, B_i1, -1, 1) # LHS_A_list[i+1] -= tmp2 * B
+    mul!(LHS_B_i, tmp3, B_i1, -1, 1)  # LHS_B_list[i] -= tmp3 * B
+
+    # Add A_list[I_separator[i], :, :] in place
+    LHS_A_i .+= A_i
 
 end
 
-LHS_A_list[P, :, :] += A_list[I_separator[P], :, :];
+LHS_A_list[P, :, :] .+= A_list[I_separator[P], :, :];
 
-inverse_cholesky_factorize(LHS_A_list, LHS_B_list, LHS_U_A_list, LHS_U_B_list, invLHS_chol, invLHS, A, P, n)
+inverse_cholesky_factorize(LHS_A_list, LHS_B_list, LHS_U_A_list, LHS_U_B_list, invLHS_chol, invLHS, A, B, C, F2, L2, U2, P, n)
 
 end
 
