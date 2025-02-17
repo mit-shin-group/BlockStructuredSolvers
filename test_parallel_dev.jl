@@ -196,27 +196,27 @@ I_separator = 1:(m+1):N
 
 
 ###############################
-function inverse_cholesky_factorize(A_list, B_list, U_list, U_B_list, invA, A, N, n)
+function inverse_cholesky_factorize(A_list, B_list, U_A_list, U_B_list, invA, A, N, n)
 
     copyto!(A, @view A_list[1, :, :])
-    U_list[1, :, :] = cholesky!(Hermitian(A)).U
+    U_A_list[1, :, :] = cholesky!(Hermitian(A)).U
 
     # Iterate over remaining blocks
     for i = 2:N
         # Solve for L_{i, i-1}
-        U_B_list[i-1, :, :] = U_list[i-1, :, :]' \  B_list[i-1, :, :]
+        U_B_list[i-1, :, :] = U_A_list[i-1, :, :]' \  B_list[i-1, :, :]
 
         # Compute Schur complement
         Schur_complement = A_list[i, :, :] - U_B_list[i-1, :, :]' * U_B_list[i-1, :, :]
 
         # Compute Cholesky factor for current block
-        U_list[i, :, :] = cholesky(Hermitian(Schur_complement)).U
+        U_A_list[i, :, :] = cholesky(Hermitian(Schur_complement)).U
 
     end
 
     for i = 1:N
 
-        invA[(i-1)*n+1:i*n, (i-1)*n +1:i*n] = U_list[i, :, :] \ I
+        invA[(i-1)*n+1:i*n, (i-1)*n +1:i*n] = U_A_list[i, :, :] \ I
 
         for level = 1:N-1
 
@@ -254,27 +254,27 @@ end
 LHS = zeros(P*n, P*n);
 invMA_list = zeros(P-1, m*n, m*n);
 
-U_list = zeros(m, n, n);
+U_A_list = zeros(m, n, n);
 U_B_list = zeros(m-1, n, n);
-invU = UpperTriangular(zeros(m * n, m * n));
+invMA_chol = UpperTriangular(zeros(m * n, m * n));
 A = zeros(n, n);
 
-LHS_diag_list = zeros(P, n, n);
-LHS_off_list = zeros(P-1, n, n);
+LHS_A_list = zeros(P, n, n);
+LHS_B_list = zeros(P-1, n, n);
 
 @views for i = 1:P-1
 
-    inverse_cholesky_factorize(A_list[I_separator[i]+1:I_separator[i]+m, :, :], B_list[I_separator[i]+1:I_separator[i]+m-1, :, :], U_list, U_B_list, invU, A, m, n)
+    inverse_cholesky_factorize(A_list[I_separator[i]+1:I_separator[i]+m, :, :], B_list[I_separator[i]+1:I_separator[i]+m-1, :, :], U_A_list, U_B_list, invMA_chol, A, m, n)
 
-    invMA = invU * invU';
+    invMA = invMA_chol * invMA_chol';
     invMA_list[i, :, :] = invMA
 
     # LHS -= MB[(i-1)*m*n+1:i*m*n, :]' * invMA * MB[(i-1)*m*n+1:i*m*n, :]
 
-    LHS_diag_list[i, :, :] -= B_list[I_separator[i], :, :] * invMA[1:n, 1:n] *  B_list[I_separator[i], :, :]'
-    LHS_diag_list[i+1, :, :] -= B_list[I_separator[i+1]-1, :, :]' * invMA[m*n-n+1:m*n, m*n-n+1:m*n] * B_list[I_separator[i+1]-1, :, :]
-    LHS_off_list[i, :, :] -= B_list[I_separator[i], :, :] * invMA[1:n, m*n-n+1:m*n] *  B_list[I_separator[i+1]-1, :, :]
-    LHS_diag_list[i, :, :] += A_list[I_separator[i], :, :]
+    LHS_A_list[i, :, :] -= B_list[I_separator[i], :, :] * invMA[1:n, 1:n] *  B_list[I_separator[i], :, :]'
+    LHS_A_list[i+1, :, :] -= B_list[I_separator[i+1]-1, :, :]' * invMA[m*n-n+1:m*n, m*n-n+1:m*n] * B_list[I_separator[i+1]-1, :, :]
+    LHS_B_list[i, :, :] -= B_list[I_separator[i], :, :] * invMA[1:n, m*n-n+1:m*n] *  B_list[I_separator[i+1]-1, :, :]
+    LHS_A_list[i, :, :] += A_list[I_separator[i], :, :]
     # LHS[(i-1)*n+1:(i-1)*n+n, (i-1)*n+1:(i-1)*n+n] -= B_list[I_separator[i], :, :] * invMA[1:n, 1:n] *  B_list[I_separator[i], :, :]'
     # LHS[(i-1)*n+n+1:(i-1)*n+n+n, (i-1)*n+n+1:(i-1)*n+n+n] -= B_list[I_separator[i+1]-1, :, :]' * invMA[m*n-n+1:m*n, m*n-n+1:m*n] * B_list[I_separator[i+1]-1, :, :]
     # LHS[(i-1)*n+1:(i-1)*n+n, (i-1)*n+n+1:(i-1)*n+n+n] -= B_list[I_separator[i], :, :] * invMA[1:n, m*n-n+1:m*n] *  B_list[I_separator[i+1]-1, :, :]
@@ -282,7 +282,7 @@ LHS_off_list = zeros(P-1, n, n);
 
 end
 
-LHS_diag_list[P, :, :] += A_list[I_separator[P], :, :]
+LHS_A_list[P, :, :] += A_list[I_separator[P], :, :]
 
 # @views for j = 1:P
 
@@ -292,18 +292,18 @@ LHS_diag_list[P, :, :] += A_list[I_separator[P], :, :]
 
 # temp = MD - temp;
 
-LHS_temp_diag_list = zeros(P, n, n);
-LHS_temp_off_list = zeros(P-1, n, n);
+LHS_U_A_list = zeros(P, n, n);
+LHS_U_B_list = zeros(P-1, n, n);
 invLHS_chol = UpperTriangular(zeros(P*n, P*n));
 
-inverse_cholesky_factorize(LHS_diag_list, LHS_off_list, LHS_temp_diag_list, LHS_temp_off_list, invLHS_chol, A, P, n)
+inverse_cholesky_factorize(LHS_A_list, LHS_B_list, LHS_U_A_list, LHS_U_B_list, invLHS_chol, A, P, n)
 
 invLHS = invLHS_chol * invLHS_chol';
 
 
 # F = cholesky!(Hermitian(LHS))
 
-RHS = zeros(P * n)
+RHS = zeros(P * n);
 
 @views for j = 1:P
 
@@ -333,11 +333,11 @@ end
 
 # x_list[I_separator, :] = reshape(temp, n, P)';
 
-A = similar(A_list, n, n)
-B = similar(A_list, n, n)
-C = similar(A_list, n, n)
-D1 = similar(A_list, n)
-D2 = similar(A_list, n)
+A = similar(A_list, n, n);
+B = similar(A_list, n, n);
+C = similar(A_list, n, n);
+D1 = similar(A_list, n);
+D2 = similar(A_list, n);
 
 #d[I_separator[j]*n-n+1:I_separator[j]*n, :]
 
