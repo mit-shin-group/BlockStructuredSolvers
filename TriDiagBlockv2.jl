@@ -32,8 +32,8 @@ struct TriDiagBlockDatav2{
 
     invMA_list::MT
 
-    invMA::MS
-    invLHS::MS
+    invMA::Symmetric{T, MS}
+    invLHS::Symmetric{T, MS}
 
     invMA_chol::UpperTriangular{T, MS}
     invLHS_chol::UpperTriangular{T, MS}
@@ -83,7 +83,7 @@ function inverse_cholesky_factorize(A_list, B_list, U_A_list, U_B_list, invM_cho
 
     end
 
-    copyto!(invM, invM_chol * invM_chol')
+    copyto!(invM, Symmetric(invM_chol * invM_chol'))
 
 end
 
@@ -165,7 +165,8 @@ B_list = data.B_list
 
 invMA_list = data.invMA_list
 
-invLHS = data.invLHS
+# invLHS = data.invLHS
+invLHS_chol = data.invLHS_chol
 
 A = data.A
 B = data.B
@@ -186,7 +187,9 @@ end
 
 end
 
-RHS = invLHS * RHS;
+# RHS = invLHS * RHS; #TODO lmul! which is faster?
+lmul!(invLHS_chol', RHS)
+lmul!(invLHS_chol, RHS)
 
 @views for i = 1:P
 

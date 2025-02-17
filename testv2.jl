@@ -55,8 +55,8 @@ LHS_U_B_list = zeros(P-1, n, n);
 
 invMA_list = zeros(P-1, m*n, m*n);
 
-invMA = zeros(m*n, m*n);
-invLHS = zeros(P*n, P*n);
+invMA = Symmetric(zeros(m*n, m*n));
+invLHS = Symmetric(zeros(P*n, P*n));
 invMA_chol = UpperTriangular(zeros(m * n, m * n));
 invLHS_chol = UpperTriangular(zeros(P*n, P*n));
 
