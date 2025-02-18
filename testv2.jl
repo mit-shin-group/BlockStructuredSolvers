@@ -5,7 +5,7 @@ include("TriDiagBlockv2.jl")
 import .TriDiagBlockv2: TriDiagBlockDatav2, factorize, solve
 
 N = 97 # number of diagonal blocks
-n = 16 # size of each block
+n = 160 # size of each block
 P = 17 # number of separators
 m  = trunc(Int, (N - P) / (P - 1))
 
@@ -55,8 +55,8 @@ LHS_U_B_list = zeros(P-1, n, n);
 
 invMA_list = zeros(P-1, m*n, m*n);
 
-invMA = Symmetric(zeros(m*n, m*n));
-invLHS = Symmetric(zeros(P*n, P*n));
+invMA = zeros(m*n, m*n);
+invLHS = zeros(P*n, P*n);
 invMA_chol = UpperTriangular(zeros(m * n, m * n));
 invLHS_chol = UpperTriangular(zeros(P*n, P*n));
 
