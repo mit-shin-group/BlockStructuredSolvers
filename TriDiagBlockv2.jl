@@ -160,6 +160,7 @@ U = data.U
 
 @views for i = 1:P-1
 
+    # Compute inverse of block tridiagonal matrices to compute inverse of MA (top left of Schur complement)
     inverse_cholesky_factorize(
         A_list[I_separator[i]+1:I_separator[i]+m, :, :], 
         B_list[I_separator[i]+1:I_separator[i]+m-1, :, :], 
