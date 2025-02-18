@@ -20,12 +20,10 @@ struct TriDiagBlockDatav2{
 
     A_list::MT
     B_list::MT
-
     U_B_list::MT
 
     LHS_A_list::MT
     LHS_B_list::MT
-
     LHS_U_B_list::MT
 
     invMA_list::MT
@@ -207,8 +205,7 @@ U = data.U
 end
 
 A .= view(LHS_A_list, P, :, :)
-B .= view(A_list, I_separator[P], :, :)
-A .+= B
+A .+= view(A_list, I_separator[P], :, :)
 LHS_A_list[P, :, :] .= A
 
 inverse_cholesky_factorize(LHS_A_list, LHS_B_list, LHS_U_B_list, invLHS_chol, invLHS, A, B, C, L, U, P, n)
@@ -233,7 +230,6 @@ B_list = data.B_list
 
 invMA_list = data.invMA_list
 
-# invLHS = data.invLHS
 invLHS_chol = data.invLHS_chol
 
 A = data.A
@@ -246,14 +242,17 @@ D2 = data.D2
 D3 = data.D3
 D4 = data.D4
 
+# Assign RHS from d
 @views for j = 1:P
 
     RHS[(j-1)*n+1:j*n] .= d[I_separator[j]*n-n+1:I_separator[j]*n] # d_list[I_separator[j], :]
 
 end
 
+# Compute RHS from Schur complement
 @views for i = 1:P-1
 
+    # RHS[(i-1)*n+1:(i-1)*n+n] -= B_list[I_separator[i], :, :] * invMA_list[i, :, :][1:n, :] * d[I_separator[i]*n+1:I_separator[i+1]*n-n]
     D .= invMA_list[i, :, :][1:n, :]
     B .= B_list[I_separator[i], :, :]
 
@@ -261,22 +260,22 @@ end
     D3 .= RHS[(i-1)*n+1:(i-1)*n+n]
 
     mul!(D2, D, D1)
-    BLAS.gemm!('N', 'N', -1.0, B, D2, 1.0, D3)
+    mul!(D3, B, D2, -1.0, 1.0)
 
     RHS[(i-1)*n+1:(i-1)*n+n] .= D3
 
+    # RHS[(i-1)*n+n+1:(i-1)*n+n+n] -= B_list[I_separator[i+1]-1, :, :]' * invMA_list[i, :, :][m*n-n+1:m*n, :] * d[I_separator[i]*n+1:I_separator[i+1]*n-n]
     D .= invMA_list[i, :, :][m*n-n+1:m*n, :]
     B .= B_list[I_separator[i+1]-1, :, :]
 
     D3 .= RHS[(i-1)*n+n+1:(i-1)*n+n+n]
 
     mul!(D2, D, D1)
-    BLAS.gemm!('T', 'N', -1.0, B, D2, 1.0, D3)
+    mul!(D3, B', D2, -1.0, 1.0)
 
     RHS[(i-1)*n+n+1:(i-1)*n+n+n] .= D3
 
-    # RHS[(i-1)*n+1:(i-1)*n+n] -= B_list[I_separator[i], :, :] * invMA_list[i, :, :][1:n, :] * d[I_separator[i]*n+1:I_separator[i+1]*n-n]
-    # RHS[(i-1)*n+n+1:(i-1)*n+n+n] -= B_list[I_separator[i+1]-1, :, :]' * invMA_list[i, :, :][m*n-n+1:m*n, :] * d[I_separator[i]*n+1:I_separator[i+1]*n-n]
+
 
 end
 
@@ -284,12 +283,14 @@ end
 lmul!(invLHS_chol', RHS)
 lmul!(invLHS_chol, RHS)
 
+# Assign RHS to x solution for separators
 @views for i = 1:P
 
     x[I_separator[i]*n-n+1:I_separator[i]*n] .= RHS[(i-1)*n+1:i*n]
 
 end
 
+# Update d after Schur solve
 @views for j = 1:P-1
     copyto!(D3, d[I_separator[j]*n+1:I_separator[j]*n+n])
     copyto!(B, B_list[I_separator[j], :, :]')
@@ -305,7 +306,10 @@ end
 
 end
 
+# solve for non-separators
 @views for i = 1:P-1
+
+    # x[I_separator[i]*n+1:I_separator[i+1]*n-n] = invMA_list[i, :, :] *  d[I_separator[i]*n+1:I_separator[i+1]*n-n]
 
     D1 .= d[I_separator[i]*n+1:I_separator[i+1]*n-n]
     D4 .= x[I_separator[i]*n+1:I_separator[i+1]*n-n]
@@ -316,7 +320,6 @@ end
 
     x[I_separator[i]*n+1:I_separator[i+1]*n-n] .= D4
 
-    # x[I_separator[i]*n+1:I_separator[i+1]*n-n] = invMA_list[i, :, :] *  d[I_separator[i]*n+1:I_separator[i+1]*n-n]
     
 end
 

@@ -4,13 +4,10 @@ import Pkg
 include("TriDiagBlockv2.jl")
 import .TriDiagBlockv2: TriDiagBlockDatav2, factorize, solve
 
-# N = 97 # number of diagonal blocks
-n = 20 # size of each block
-P = 300 # number of separators
-# m  = trunc(Int, (N - P) / (P - 1))
-m = 5
-
-N = P + (P - 1) * m
+n = 10 # size of each block
+P = 50 # number of separators
+m = 2 # number of blocks between separators
+N = P + (P - 1) * m # number of diagonal blocks
 
 #######################################
 A_list = zeros(N, n, n);
@@ -58,7 +55,7 @@ invMA_list = zeros(P-1, m*n, m*n);
 
 invMA = zeros(m*n, m*n);
 invLHS = zeros(P*n, P*n);
-invMA_chol = UpperTriangular(zeros(m * n, m * n));
+invMA_chol = UpperTriangular(zeros(m*n, m*n));
 invLHS_chol = UpperTriangular(zeros(P*n, P*n));
 
 A = similar(A_list, n, n);
