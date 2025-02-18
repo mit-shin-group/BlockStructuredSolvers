@@ -21,13 +21,11 @@ struct TriDiagBlockDatav2{
     A_list::MT
     B_list::MT
 
-    U_A_list::MT
     U_B_list::MT
 
     LHS_A_list::MT
     LHS_B_list::MT
 
-    LHS_U_A_list::MT
     LHS_U_B_list::MT
 
     invMA_list::MT
@@ -44,13 +42,8 @@ struct TriDiagBlockDatav2{
     D::MS
     E::MS
 
-    L1::LowerTriangular{T, MS}
-    U1::UpperTriangular{T, MS}
-    L2::LowerTriangular{T, MS}
-    U2::UpperTriangular{T, MS}
-
-    F1::Cholesky{T, Matrix{T}}
-    F2::Cholesky{T, Matrix{T}}
+    L::LowerTriangular{T, MS}
+    U::UpperTriangular{T, MS}
 
     D1::MU
     D2::MU
@@ -59,12 +52,12 @@ struct TriDiagBlockDatav2{
 
 end
 
-function inverse_cholesky_factorize(A_list, B_list, U_A_list, U_B_list, invM_chol, invM, A, B, C, D, E, F, L, U, N, n)
+function inverse_cholesky_factorize(A_list, B_list, U_B_list, invM_chol, invM, A, B, C, L, U, N, n)
 
     # copyto!(A, @view A_list[1, :, :])
     A .= view(A_list, 1, :, :)
     # U_A_list[1, :, :] = cholesky!(Hermitian(A)).U
-    F = cholesky!(Hermitian(A)) # TODO check F allocation
+    cholesky!(Hermitian(A)) # TODO check F allocation
     # L .= F.L;
     # U .= F.U;
     U .= UpperTriangular(A);
@@ -86,8 +79,7 @@ function inverse_cholesky_factorize(A_list, B_list, U_A_list, U_B_list, invM_cho
         A .= A_list[i, :, :]
 
         # Compute Schur complement
-        BLAS.gemm!('T', 'N', -1.0, B, B, 1.0, A)
-
+        mul!(A, B', B, -1.0, 1.0)
         
         # A .= A_list[i, :, :] - U_B_list[i-1, :, :]' * U_B_list[i-1, :, :]
 
@@ -148,11 +140,9 @@ I_separator = data.I_separator
 
 A_list = data.A_list
 B_list = data.B_list
-U_A_list = data.U_A_list
 U_B_list = data.U_B_list
 LHS_A_list = data.LHS_A_list
 LHS_B_list = data.LHS_B_list
-LHS_U_A_list = data.LHS_U_A_list
 LHS_U_B_list = data.LHS_U_B_list
 
 invMA_list = data.invMA_list
@@ -166,34 +156,23 @@ invLHS = data.invLHS
 A = data.A
 B = data.B
 C = data.C
-D = data.D
-E = data.E
 
-F1 = data.F1
-F2 = data.F2
-
-L1 = data.L1
-L2 = data.L2
-U1 = data.U1
-U2 = data.U2
+L = data.L
+U = data.U
 
 @views for i = 1:P-1
 
     inverse_cholesky_factorize(
         A_list[I_separator[i]+1:I_separator[i]+m, :, :], 
         B_list[I_separator[i]+1:I_separator[i]+m-1, :, :], 
-        U_A_list, 
         U_B_list, 
         invMA_chol,
         invMA,
         A,
         B,
         C,
-        D,
-        E,
-        F1,
-        L1,
-        U1,
+        L,
+        U,
         m, 
         n)
     
@@ -225,46 +204,14 @@ U2 = data.U2
     mul!(A, B, C, -1.0, 1.0)
     LHS_B_list[i, :, :] .= A
 
-    # LHS_A_i = view(LHS_A_list, i, :, :)
-    # LHS_A_i1 = view(LHS_A_list, i+1, :, :)
-    # LHS_B_i = view(LHS_B_list, i, :, :)
-    
-    # B_i = view(B_list, I_separator[i], :, :)
-    # B_i1 = view(B_list, I_separator[i+1]-1, :, :)
-
-    # invMA_1n = view(invMA, 1:n, 1:n)
-    # invMA_mn = view(invMA, m*n-n+1:m*n, m*n-n+1:m*n)
-    # invMA_1m = view(invMA, 1:n, m*n-n+1:m*n)
-
-    # A_i = view(A_list, I_separator[i], :, :)
-
-    # # Temporary storage for intermediate multiplications (to avoid new allocations)
-    # tmp1 = similar(LHS_A_i) 
-    # tmp2 = similar(LHS_A_i1)
-    # tmp3 = similar(LHS_B_i)
-
-    # # Compute B * invMA * B' in-place
-    # mul!(tmp1, B_i, invMA_1n)    # tmp1 = B * invMA_1n
-    # mul!(tmp2, B_i1', invMA_mn)  # tmp2 = B' * invMA_mn
-    # mul!(tmp3, B_i, invMA_1m)    # tmp3 = B * invMA_1m
-
-    # # Apply the updates in place
-    # mul!(LHS_A_i, tmp1, B_i', -1, 1)  # LHS_A_list[i] -= tmp1 * B'
-    # mul!(LHS_A_i1, tmp2, B_i1, -1, 1) # LHS_A_list[i+1] -= tmp2 * B
-    # mul!(LHS_B_i, tmp3, B_i1, -1, 1)  # LHS_B_list[i] -= tmp3 * B
-
-    # # Add A_list[I_separator[i], :, :] in place
-    # LHS_A_i .+= A_i
-
 end
 
 A .= view(LHS_A_list, P, :, :)
 B .= view(A_list, I_separator[P], :, :)
 A .+= B
 LHS_A_list[P, :, :] .= A
-# LHS_A_list[P, :, :] .+= A_list[I_separator[P], :, :];
 
-inverse_cholesky_factorize(LHS_A_list, LHS_B_list, LHS_U_A_list, LHS_U_B_list, invLHS_chol, invLHS, A, B, C, D, E, F2, L2, U2, P, n)
+inverse_cholesky_factorize(LHS_A_list, LHS_B_list, LHS_U_B_list, invLHS_chol, invLHS, A, B, C, L, U, P, n)
 
 end
 

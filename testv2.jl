@@ -4,10 +4,13 @@ import Pkg
 include("TriDiagBlockv2.jl")
 import .TriDiagBlockv2: TriDiagBlockDatav2, factorize, solve
 
-N = 97 # number of diagonal blocks
-n = 160 # size of each block
-P = 17 # number of separators
-m  = trunc(Int, (N - P) / (P - 1))
+# N = 97 # number of diagonal blocks
+n = 20 # size of each block
+P = 300 # number of separators
+# m  = trunc(Int, (N - P) / (P - 1))
+m = 5
+
+N = P + (P - 1) * m
 
 #######################################
 A_list = zeros(N, n, n);
@@ -46,11 +49,9 @@ x_true = reshape(x_true', N*n);
 
 I_separator = 1:(m+1):N
 
-U_A_list = zeros(m, n, n);
 U_B_list = zeros(m-1, n, n);
 LHS_A_list = zeros(P, n, n);
 LHS_B_list = zeros(P-1, n, n);
-LHS_U_A_list = zeros(P, n, n);
 LHS_U_B_list = zeros(P-1, n, n);
 
 invMA_list = zeros(P-1, m*n, m*n);
@@ -71,13 +72,8 @@ D2 = similar(A_list, n);
 D3 = similar(A_list, n);
 D4 = similar(A_list, m*n);
 
-F1 = cholesky(Matrix{Float64}(I, n, n))
-L1 = LowerTriangular(zeros(n, n));
-U1 = UpperTriangular(zeros(n, n));
-
-F2 = cholesky(Matrix{Float64}(I, n, n))
-L2 = LowerTriangular(zeros(n, n));
-U2 = UpperTriangular(zeros(n, n));
+L = LowerTriangular(zeros(n, n));
+U = UpperTriangular(zeros(n, n));
 
 data = TriDiagBlockDatav2(
     N, 
@@ -87,11 +83,9 @@ data = TriDiagBlockDatav2(
     I_separator, 
     A_list, 
     B_list, 
-    U_A_list, 
     U_B_list,
     LHS_A_list,
     LHS_B_list,
-    LHS_U_A_list,
     LHS_U_B_list,
     invMA_list,
     invMA,
@@ -103,12 +97,8 @@ data = TriDiagBlockDatav2(
     C,
     D,
     E,
-    L1,
-    U1,
-    L2,
-    U2,
-    F1,
-    F2,
+    L,
+    U,
     D1,
     D2,
     D3,
