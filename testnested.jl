@@ -103,7 +103,6 @@ data = TriDiagBlockDataNested(
     D2,
     D3,
     D4,
-    nothing,
     nothing
     );
 
@@ -174,7 +173,6 @@ for i = 2:level
         D2,
         D3,
         D4,
-        prev_data,
         nothing
         );
 
@@ -184,25 +182,9 @@ end
 
 @time factorize(data);
 
-n = 10 # size of each block
-P = 7 # number of separators
-m = 2 # number of blocks between separators
-N = P + (P - 1) * m # number of diagonal blocks
-
-RHS = zeros(P * n);
-x = zeros(N * n);
+RHS = zeros(data.P * n);
+x = zeros(data.N * n);
 
 @time solve(data, d, RHS, x)
 
 norm(x - x_true)
-
-##################
-# seq = Int[]
-
-# for i = data.I_separator
-
-#     append!(seq, (i-1)*n+1:i*n)
-    
-# end
-
-# solve(data.NextData, view(d, seq), zeros(data.NextData.P * n), view(x, seq))

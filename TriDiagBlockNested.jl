@@ -48,7 +48,6 @@ mutable struct TriDiagBlockDataNested{
     D3::MU
     D4::MU
 
-    PrevData::Union{TriDiagBlockDataNested, Nothing}
     NextData::Union{TriDiagBlockDataNested, Nothing}
 
 end
