@@ -1,8 +1,8 @@
 using LinearAlgebra
 
 import Pkg
-include("TriDiagBlock.jl")
-import .TriDiagBlock: TriDiagBlockData, factorize!, solve
+include("TriDiagBlockv1.jl")
+import .TriDiagBlockv1: TriDiagBlockDatav1, factorize!, solve
 
 N = 97 # number of diagonal blocks
 n = 16 # size of each block
