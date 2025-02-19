@@ -117,6 +117,9 @@ for i = 2:level
 
     I_separator = 1:(m+1):N;
 
+    A_list = zeros(P, n, n);
+    B_list = zeros(P-1, n, n);
+
     U_B_list = zeros(m-1, n, n);
     LHS_A_list = zeros(P, n, n);
     LHS_B_list = zeros(P-1, n, n);
@@ -191,4 +194,15 @@ x = zeros(N * n);
 
 @time solve(data, d, RHS, x)
 
-# norm(x - x_true)
+norm(x - x_true)
+
+##################
+# seq = Int[]
+
+# for i = data.I_separator
+
+#     append!(seq, (i-1)*n+1:i*n)
+    
+# end
+
+# solve(data.NextData, view(d, seq), zeros(data.NextData.P * n), view(x, seq))

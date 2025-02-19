@@ -208,6 +208,8 @@ if isnothing(data.NextData)
 
 else
 
+    data.NextData.A_list = LHS_A_list
+    data.NextData.B_list = LHS_B_list
     factorize(data.NextData)
 
 end
@@ -287,17 +289,26 @@ if isnothing(data.NextData)
     lmul!(invLHS_chol', RHS)
     lmul!(invLHS_chol, RHS)
 
+    # Assign RHS to x solution for separators
+    @views for i = 1:P
+
+        x[I_separator[i]*n-n+1:I_separator[i]*n] .= RHS[(i-1)*n+1:i*n]
+
+    end
+
+    # println(x)
+
 else
 
+    seq = Int[]
 
-    solve(data.NextData, d[1:data.NextData.N * n], RHS[1:data.NextData.P * n], x[1:data.NextData.N * n])
+    for i = I_separator
 
-end
+        append!(seq, (i-1)*n+1:i*n)
+        
+    end
 
-# Assign RHS to x solution for separators
-@views for i = 1:P
-
-    x[I_separator[i]*n-n+1:I_separator[i]*n] .= RHS[(i-1)*n+1:i*n]
+    solve(data.NextData, RHS, zeros(data.NextData.P * n), view(x, seq))
 
 end
 
