@@ -313,7 +313,7 @@ end
     # x[I_separator[i]*n+1:I_separator[i+1]*n-n] = invMA_list[i, :, :] *  d[I_separator[i]*n+1:I_separator[i+1]*n-n]
 
     D1 .= d[I_separator[i]*n+1:I_separator[i+1]*n-n]
-    D4 .= x[I_separator[i]*n+1:I_separator[i+1]*n-n]
+    # D4 .= x[I_separator[i]*n+1:I_separator[i+1]*n-n]
 
     E .= invMA_list[i, :, :]
 
