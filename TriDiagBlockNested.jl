@@ -68,7 +68,7 @@ function inverse_cholesky_factorize(A_list, B_list, U_B_list, invM_chol, invM, A
 
         # Solve for off diagonal of L inverse L_{i, i-1}
         # U_B_list[i-1, :, :] = L \ B_list[i-1, :, :]
-        A .= B_list[i-1, :, :]
+        A .= B_list[i-1, :, :] # TODO
         ldiv!(B, L, A)
         U_B_list[i-1, :, :] .= B
         
@@ -165,6 +165,7 @@ U = data.U
         m, 
         n)
     
+    #TODO ditch inverse
     invMA_list[i, :, :] .= invMA; #TODO how to store? invMA vs invMA_chol
 
     # LHS_A_list[i, :, :] -= B_list[I_separator[i], :, :] * invMA[1:n, 1:n] *  B_list[I_separator[i], :, :]'
@@ -281,6 +282,7 @@ end
 end
 
 # RHS = invLHS * RHS; #TODO lmul! which is faster?
+#TODO remove if/else
 
 if isnothing(data.NextData)
 

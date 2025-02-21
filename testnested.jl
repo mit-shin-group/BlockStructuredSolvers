@@ -4,10 +4,12 @@ import Pkg
 include("TriDiagBlockNested.jl")
 import .TriDiagBlockNested: TriDiagBlockDataNested, factorize, solve
 
-n = 10 # size of each block
-P = 7 # number of separators
+n = 100 # size of each block
+# P = 17 # number of separators
 m = 2 # number of blocks between separators
-N = P + (P - 1) * m # number of diagonal blocks
+N = 55 # number of diagonal blocks
+P = Int((N + m) / (m+1))
+
 
 #######################################
 A_list = zeros(N, n, n);
@@ -45,7 +47,7 @@ end
 x_true = reshape(x_true', N*n);
 
 #################################################
-level = 2;
+level = 3;
 
 I_separator = 1:(m+1):N;
 
@@ -112,7 +114,7 @@ for i = 2:level
 
     N = P;
     m = 2;
-    P = 3;
+    P = Int((N + m) / (m+1));
 
     I_separator = 1:(m+1):N;
 

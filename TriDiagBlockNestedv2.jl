@@ -1,10 +1,10 @@
-module TriDiagBlockv3
+module TriDiagBlockNested
 
 using LinearAlgebra
 
-export TriDiagBlockDatav3, factorize, solve
+export TriDiagBlockDataNested, factorize, solve
 
-struct TriDiagBlockDatav3{
+mutable struct TriDiagBlockDataNested{
     T, 
     MT <: AbstractArray{T, 3},
     MS <: AbstractArray{T, 2},
@@ -27,7 +27,6 @@ struct TriDiagBlockDatav3{
     MA_chol_list::MT
     factor_list::MT
 
-    LHS::MS
     RHS::MU
 
     MA_chol::UpperTriangular{T, MS}
@@ -41,6 +40,8 @@ struct TriDiagBlockDatav3{
 
     U_n::UpperTriangular{T, MS}
     U_mn::UpperTriangular{T, MS}
+
+    NextData::Union{TriDiagBlockDataNested, Nothing}
 
 end
 
@@ -74,7 +75,7 @@ function cholesky_factorize(A_list, B_list, M_chol, A, B, U, N, n)
 end
 
 function factorize(
-    data::TriDiagBlockDatav3
+    data::TriDiagBlockDataNested
 )
 
 P = data.P
@@ -92,7 +93,6 @@ LHS_B_list = data.LHS_B_list
 factor_list = data.factor_list
 MA_chol_list = data.MA_chol_list
 
-LHS_chol = data.LHS_chol
 MA_chol = data.MA_chol
 
 A = data.M_n_1
@@ -142,12 +142,24 @@ copyto!(A, view(LHS_A_list, P, :, :))
 A .+= view(A_list, I_separator[P], :, :) #TODO how to get rid of .+=
 copyto!(view(LHS_A_list, P, :, :), A)
 
-cholesky_factorize(LHS_A_list, LHS_B_list, LHS_chol, A, B, U, P, n)
+if isnothing(data.NextData)
+
+    LHS_chol = data.LHS_chol
+
+    cholesky_factorize(LHS_A_list, LHS_B_list, LHS_chol, A, B, U, P, n)
+
+else
+
+    data.NextData.A_list = LHS_A_list
+    data.NextData.B_list = LHS_B_list
+    factorize(data.NextData)
+
+end
 
 end
 
 function solve(
-    data::TriDiagBlockDatav3,
+    data::TriDiagBlockDataNested,
     d,
     x
 )
@@ -161,15 +173,13 @@ B_list = data.B_list
 
 MA_chol_list = data.MA_chol_list
 
-RHS = data.RHS
-
-LHS_chol = data.LHS_chol
-
 factor_list = data.factor_list
 
 B = data.M_n_2
 U = data.U_mn
 M_mn_2n_1 = data.M_mn_2n_1
+
+RHS = data.RHS
 
 # Assign RHS from d
 for j = 1:P
@@ -187,13 +197,31 @@ for i = 1:P-1
 end
 
 # RHS = invLHS * RHS; #TODO lmul! which is faster?
-ldiv!(LHS_chol', RHS)
-ldiv!(LHS_chol, RHS)
 
-# Assign RHS to x solution for separators
-for i = 1:P
+if isnothing(data.NextData)
 
-    copyto!(view(x, I_separator[i]*n-n+1:I_separator[i]*n), view(RHS, (i-1)*n+1:i*n))
+    LHS_chol = data.LHS_chol
+    ldiv!(LHS_chol', RHS)
+    ldiv!(LHS_chol, RHS)
+
+    # Assign RHS to x solution for separators
+    for i = 1:P
+
+        copyto!(view(x, I_separator[i]*n-n+1:I_separator[i]*n), view(RHS, (i-1)*n+1:i*n))
+    
+    end
+
+else
+
+    seq = Int[]
+
+    for i = I_separator
+
+        append!(seq, (i-1)*n+1:i*n)
+        
+    end
+
+    solve(data.NextData, RHS, view(x, seq))
 
 end
 

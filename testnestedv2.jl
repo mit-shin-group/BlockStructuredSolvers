@@ -1,13 +1,14 @@
 using LinearAlgebra
 
 import Pkg
-include("TriDiagBlockv3.jl")
-import .TriDiagBlockv3: TriDiagBlockDatav3, factorize, solve
+include("TriDiagBlockNestedv2.jl")
+import .TriDiagBlockNested: TriDiagBlockDataNested, factorize, solve
 
-n = 10 # size of each block
-P = 50 # number of separators
-m = 3 # number of blocks between separators
-N = P + (P - 1) * m # number of diagonal blocks
+n = 100 # size of each block
+# P = 17 # number of separators
+m = 2 # number of blocks between separators
+N = 55 # number of diagonal blocks
+P = Int((N + m) / (m+1))
 
 #######################################
 A_list = zeros(N, n, n);
@@ -44,6 +45,9 @@ end
 
 x_true = reshape(x_true', N*n);
 
+#################################################
+level = 3;
+
 I_separator = 1:(m+1):N
 
 LHS_A_list = zeros(P, n, n);
@@ -51,7 +55,6 @@ LHS_B_list = zeros(P-1, n, n);
 
 MA_list = zeros(P-1, m*n, m*n);
 
-LHS = zeros(P*n, P*n);
 RHS = zeros(P * n);
 
 MA_chol = UpperTriangular(zeros(m*n, m*n));
@@ -69,8 +72,7 @@ M_mn_2n_2 = zeros(m*n, 2*n);
 
 U_n = UpperTriangular(zeros(n, n));
 
-
-data = TriDiagBlockDatav3(
+data = TriDiagBlockDataNested(
     N, 
     m, 
     n, 
@@ -82,7 +84,6 @@ data = TriDiagBlockDatav3(
     LHS_B_list,
     MA_list,
     factor_list,
-    LHS,
     RHS,
     MA_chol,
     LHS_chol,
@@ -93,11 +94,73 @@ data = TriDiagBlockDatav3(
     M_mn_2n_2,
     U_n,
     U_mn,
-    );
+    nothing
+);
+
+prev_data = data;
+
+for i = 2:level
+
+    N = P;
+    m = 2;
+    P = Int((N + m) / (m+1));
+
+    I_separator = 1:(m+1):N
+
+    LHS_A_list = zeros(P, n, n);
+    LHS_B_list = zeros(P-1, n, n);
+
+    MA_list = zeros(P-1, m*n, m*n);
+
+    RHS = zeros(P * n);
+
+    MA_chol = UpperTriangular(zeros(m*n, m*n));
+    LHS_chol = UpperTriangular(zeros(P*n, P*n));
+
+    factor_list = zeros(P-1, m*n, 2*n);
+
+    M_n_1 = similar(A_list, n, n);
+    M_n_2 = similar(A_list, n, n);
+    U_mn = UpperTriangular(zeros(m*n, m*n));
+
+    M_2n = similar(A_list, 2*n, 2*n);
+    M_mn_2n_1 = zeros(m*n, 2*n);
+    M_mn_2n_2 = zeros(m*n, 2*n);
+
+    U_n = UpperTriangular(zeros(n, n));
+
+    next_data = TriDiagBlockDataNested(
+        N, 
+        m, 
+        n, 
+        P, 
+        I_separator, 
+        A_list, 
+        B_list,
+        LHS_A_list,
+        LHS_B_list,
+        MA_list,
+        factor_list,
+        RHS,
+        MA_chol,
+        LHS_chol,
+        M_n_1,
+        M_n_2,
+        M_2n,
+        M_mn_2n_1,
+        M_mn_2n_2,
+        U_n,
+        U_mn,
+        nothing
+        );
+
+    prev_data.NextData = next_data;
+    prev_data = next_data;
+end
 
 @time factorize(data);
 
-x = zeros(N * n);
+x = zeros(data.N * n);
 
 @time solve(data, d, x)
 
