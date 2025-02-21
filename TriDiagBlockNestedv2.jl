@@ -37,11 +37,13 @@ mutable struct TriDiagBlockDataNested{
     M_2n::MS
     M_mn_2n_1::MS
     M_mn_2n_2::MS
-
     U_n::UpperTriangular{T, MS}
     U_mn::UpperTriangular{T, MS}
 
     NextData::Union{TriDiagBlockDataNested, Nothing}
+
+    next_idx::Vector{Int}
+    next_x::MU
 
 end
 
@@ -213,20 +215,14 @@ if isnothing(data.NextData)
 
 else
 
-    seq = Int[]
-
-    for i = I_separator
-
-        append!(seq, (i-1)*n+1:i*n)
-        
-    end
-
-    solve(data.NextData, RHS, view(x, seq))
+    copyto!(data.next_x, view(x, data.next_idx))
+    solve(data.NextData, RHS, data.next_x)
+    copyto!(view(x, data.next_idx), data.next_x)
 
 end
 
 # Update d after Schur solve
-for j = 1:P-1 #TODO remove view
+for j = 1:P-1 #TODO remove B
 
     copyto!(B, view(B_list, I_separator[j], :, :)')
     mul!(view(d, I_separator[j]*n+1:I_separator[j]*n+n,), B, view(x, I_separator[j]*n-n+1:I_separator[j]*n), -1.0, 1.0)

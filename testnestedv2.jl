@@ -72,6 +72,19 @@ M_mn_2n_2 = zeros(m*n, 2*n);
 
 U_n = UpperTriangular(zeros(n, n));
 
+v_n = zeros(2*n);
+
+next_idx = Int[]
+
+for j = I_separator
+
+    append!(next_idx, (j-1)*n+1:j*n)
+    
+end
+
+next_x = zeros(P*n);
+
+
 data = TriDiagBlockDataNested(
     N, 
     m, 
@@ -94,7 +107,9 @@ data = TriDiagBlockDataNested(
     M_mn_2n_2,
     U_n,
     U_mn,
-    nothing
+    nothing,
+    next_idx,
+    next_x
 );
 
 prev_data = data;
@@ -129,12 +144,24 @@ for i = 2:level
 
     U_n = UpperTriangular(zeros(n, n));
 
+    v_n = zeros(2*n);
+
+    next_idx = Int[]
+
+    for j = I_separator
+
+        append!(next_idx, (j-1)*n+1:j*n)
+        
+    end
+
+    next_x = zeros(P*n);
+
     next_data = TriDiagBlockDataNested(
         N, 
         m, 
         n, 
         P, 
-        I_separator, 
+        I_separator,
         A_list, 
         B_list,
         LHS_A_list,
@@ -151,7 +178,9 @@ for i = 2:level
         M_mn_2n_2,
         U_n,
         U_mn,
-        nothing
+        nothing,
+        next_idx,
+        next_x,
         );
 
     prev_data.NextData = next_data;
