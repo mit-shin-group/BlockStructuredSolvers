@@ -1,10 +1,10 @@
-module TriDiagBlockNested
+module TriDiagBlockCUDA
 
 using LinearAlgebra
 
-export TriDiagBlockDataNested, factorize, solve
+export TriDiagBlockDataCUDA, factorize, solve
 
-mutable struct TriDiagBlockDataNested{
+mutable struct TriDiagBlockDataCUDA{ #TODO create initialize function
     T, 
     MT <: AbstractArray{T, 3},
     MS <: AbstractArray{T, 2},
