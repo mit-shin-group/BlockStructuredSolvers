@@ -1,0 +1,230 @@
+using HSL
+using LinearAlgebra
+using SparseArrays
+using LinearAlgebra, BlockArrays
+
+function construct_block_tridiagonal(A_list, B_list)
+    N, n, _ = size(A_list)
+    blocks = Matrix{Float64}[]
+
+    # Construct the block matrix row-wise
+    for i = 1:N
+        row_blocks = Any[]
+        for j = 1:N
+            if i == j
+                push!(row_blocks, A_list[i, :, :])  # Diagonal blocks
+            elseif j == i + 1
+                push!(row_blocks, B_list[i, :, :])  # Upper diagonal blocks
+            elseif j == i - 1
+                push!(row_blocks, B_list[j, :, :]' )  # Lower diagonal blocks (transpose)
+            else
+                push!(row_blocks, zeros(n, n))  # Zero blocks elsewhere
+            end
+        end
+        push!(blocks, hcat(row_blocks...))
+    end
+
+    return vcat(blocks...)
+end
+
+n = 100 # size of each block
+# P = 17 # number of separators
+m = 2 # number of blocks between separators
+N = 55 # number of diagonal blocks
+P = Int((N + m) / (m+1))
+
+#######################################
+A_list = zeros(N, n, n);
+for i = 1:N
+    temp = randn(Float64, n, n)
+    A_list[i, :, :] = temp * temp' + n * I
+end
+
+B_list = zeros(N-1, n, n);
+for i = 1:N-1
+    temp = randn(Float64, n, n)
+    B_list[i, :, :] = temp
+end
+
+x_true = rand(N, n);
+d_list = zeros(N, n);
+d_list[1, :] = A_list[1, :, :] * x_true[1, :] + B_list[1, :, :] * x_true[2, :];
+
+@views for i = 2:N-1
+
+    d_list[i, :] = B_list[i-1, :, :]' * x_true[i-1, :] + A_list[i, :, :] * x_true[i, :] + B_list[i, :, :] * x_true[i+1, :];
+
+end
+
+d_list[N, :] = B_list[N-1, :, :]' * x_true[N-1, :] + A_list[N, :, :] * x_true[N, :];
+
+d = zeros(N * n);
+
+@views for i = 1:N
+    
+    d[(i-1)*n+1:i*n] = d_list[i, :]
+
+end
+
+x_true = reshape(x_true', N*n);
+
+BigMatrix = construct_block_tridiagonal(A_list, B_list);
+SparseBigMatrix = SparseMatrixCSC(BigMatrix);
+
+@time x .= ma97_solve(SparseBigMatrix, d)
+
+
+#*********************
+
+import Pkg
+include("TriDiagBlockNestedv2.jl")
+import .TriDiagBlockNested: TriDiagBlockDataNested, factorize, solve
+
+level = 3;
+
+I_separator = 1:(m+1):N
+
+LHS_A_list = zeros(P, n, n);
+LHS_B_list = zeros(P-1, n, n);
+
+MA_list = zeros(P-1, m*n, m*n);
+
+RHS = zeros(P * n);
+
+MA_chol = UpperTriangular(zeros(m*n, m*n));
+LHS_chol = UpperTriangular(zeros(P*n, P*n));
+
+factor_list = zeros(P-1, m*n, 2*n);
+
+M_n_1 = similar(A_list, n, n);
+M_n_2 = similar(A_list, n, n);
+U_mn = UpperTriangular(zeros(m*n, m*n));
+
+M_2n = similar(A_list, 2*n, 2*n);
+M_mn_2n_1 = zeros(m*n, 2*n);
+M_mn_2n_2 = zeros(m*n, 2*n);
+
+U_n = UpperTriangular(zeros(n, n));
+
+v_n = zeros(2*n);
+
+next_idx = Int[]
+
+for j = I_separator
+
+    append!(next_idx, (j-1)*n+1:j*n)
+    
+end
+
+next_x = zeros(P*n);
+
+
+data = TriDiagBlockDataNested(
+    N, 
+    m, 
+    n, 
+    P, 
+    I_separator, 
+    A_list, 
+    B_list,
+    LHS_A_list,
+    LHS_B_list,
+    MA_list,
+    factor_list,
+    RHS,
+    MA_chol,
+    LHS_chol,
+    M_n_1,
+    M_n_2,
+    M_2n,
+    M_mn_2n_1,
+    M_mn_2n_2,
+    U_n,
+    U_mn,
+    nothing,
+    next_idx,
+    next_x
+);
+
+prev_data = data;
+
+for i = 2:level
+
+    N = P;
+    m = 2;
+    P = Int((N + m) / (m+1));
+
+    I_separator = 1:(m+1):N
+
+    LHS_A_list = zeros(P, n, n);
+    LHS_B_list = zeros(P-1, n, n);
+
+    MA_list = zeros(P-1, m*n, m*n);
+
+    RHS = zeros(P * n);
+
+    MA_chol = UpperTriangular(zeros(m*n, m*n));
+    LHS_chol = UpperTriangular(zeros(P*n, P*n));
+
+    factor_list = zeros(P-1, m*n, 2*n);
+
+    M_n_1 = similar(A_list, n, n);
+    M_n_2 = similar(A_list, n, n);
+    U_mn = UpperTriangular(zeros(m*n, m*n));
+
+    M_2n = similar(A_list, 2*n, 2*n);
+    M_mn_2n_1 = zeros(m*n, 2*n);
+    M_mn_2n_2 = zeros(m*n, 2*n);
+
+    U_n = UpperTriangular(zeros(n, n));
+
+    v_n = zeros(2*n);
+
+    next_idx = Int[]
+
+    for j = I_separator
+
+        append!(next_idx, (j-1)*n+1:j*n)
+        
+    end
+
+    next_x = zeros(P*n);
+
+    next_data = TriDiagBlockDataNested(
+        N, 
+        m, 
+        n, 
+        P, 
+        I_separator,
+        A_list, 
+        B_list,
+        LHS_A_list,
+        LHS_B_list,
+        MA_list,
+        factor_list,
+        RHS,
+        MA_chol,
+        LHS_chol,
+        M_n_1,
+        M_n_2,
+        M_2n,
+        M_mn_2n_1,
+        M_mn_2n_2,
+        U_n,
+        U_mn,
+        nothing,
+        next_idx,
+        next_x,
+        );
+
+    prev_data.NextData = next_data;
+    prev_data = next_data;
+end
+
+@time factorize(data);
+
+x = zeros(data.N * n);
+
+@time solve(data, d, x)
+
+norm(x - x_true)
