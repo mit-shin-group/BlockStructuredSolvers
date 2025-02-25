@@ -1,7 +1,7 @@
 using LinearAlgebra
 
 import Pkg
-include("TriDiagBlockNestedv3.jl")
+include("TriDiagBlockNestedv2.jl")
 import .TriDiagBlockNested: TriDiagBlockDataNested, initialize, factorize, solve
 
 n = 100 # size of each block
