@@ -1,7 +1,12 @@
 using HSL
 using LinearAlgebra
 using SparseArrays
-using LinearAlgebra, BlockArrays
+using BlockArrays
+
+import Pkg
+include("TriDiagBlockNestedv2.jl")
+import .TriDiagBlockNested: TriDiagBlockDataNested, factorize, solve
+
 
 function construct_block_tridiagonal(A_list, B_list)
     N, n, _ = size(A_list)
@@ -27,7 +32,7 @@ function construct_block_tridiagonal(A_list, B_list)
     return vcat(blocks...)
 end
 
-n = 100 # size of each block
+n = 50 # size of each block
 # P = 17 # number of separators
 m = 2 # number of blocks between separators
 N = 55 # number of diagonal blocks
@@ -69,17 +74,15 @@ end
 x_true = reshape(x_true', N*n);
 
 BigMatrix = construct_block_tridiagonal(A_list, B_list);
-SparseBigMatrix = SparseMatrixCSC(BigMatrix);
+BigMatrix = Ma57(BigMatrix);
 
-@time x .= ma97_solve(SparseBigMatrix, d)
+@time ma57_factorize!(BigMatrix);
+@time x = ma57_solve(BigMatrix, d);
+
+norm(x - x_true)
 
 
 #*********************
-
-import Pkg
-include("TriDiagBlockNestedv2.jl")
-import .TriDiagBlockNested: TriDiagBlockDataNested, factorize, solve
-
 level = 3;
 
 I_separator = 1:(m+1):N
