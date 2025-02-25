@@ -19,51 +19,6 @@ N = 55 # number of diagonal blocks
 P = Int((N + m) / (m+1)) # number of separators
 level = 3; # number of nested level
 
-
-# for i = 1:1000
-
-#     BigMatrix, d, x_true, A_list, B_list = generate_tridiagonal_system(N, n);
-
-#     #################################################
-
-#     BigMatrix_57 = Ma57(BigMatrix);
-
-#     @time ma57_factorize!(BigMatrix_57);
-#     @time x = ma57_solve(BigMatrix_57, d);
-
-#     norm(x - x_true)
-
-#     #################################################
-
-#     BigMatrix_sparse = SparseMatrixCSC(BigMatrix);
-
-#     @time F = cholesky(BigMatrix_sparse);
-
-#     @time x = F \ d;
-
-#     norm(x - x_true)
-
-#     #################################################
-
-#     @time LDLT = ldl(BigMatrix);  # LDLᵀ factorization of A
-
-#     @time x = LDLT \ d;  # solves Ax = b
-
-#     norm(x - x_true)
-
-#     #*********************
-#     data = initialize(N, m, n, P, A_list, B_list, level);
-
-#     @time factorize(data);
-
-#     x = zeros(data.N * n);
-
-#     @time solve(data, d, x)
-
-#     norm(x - x_true)
-
-# end
-
 function benchmark_factorization_and_solve(N, n, m, P, level, iter)
     # Storage for times
     ma57_factor_times = Float64[]
