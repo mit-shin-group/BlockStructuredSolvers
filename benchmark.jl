@@ -1,12 +1,13 @@
+using LinearAlgebra, SparseArrays, BlockArrays
+
+using LDLFactorizations
 using HSL
-using LinearAlgebra
-using SparseArrays
-using BlockArrays
 
 import Pkg
 include("TriDiagBlockNestedv2.jl")
 import .TriDiagBlockNested: TriDiagBlockDataNested, initialize, factorize, solve
 
+######
 
 function construct_block_tridiagonal(A_list, B_list)
     N, n, _ = size(A_list)
@@ -33,12 +34,10 @@ function construct_block_tridiagonal(A_list, B_list)
 end
 
 n = 50 # size of each block
-# P = 17 # number of separators
 m = 2 # number of blocks between separators
 N = 55 # number of diagonal blocks
-P = Int((N + m) / (m+1))
-
-level = 3;
+P = Int((N + m) / (m+1)) # number of separators
+level = 3; # number of nested level
 
 #######################################
 A_list = zeros(N, n, n);
@@ -76,13 +75,24 @@ end
 x_true = reshape(x_true', N*n);
 
 BigMatrix = construct_block_tridiagonal(A_list, B_list);
-BigMatrix = Ma57(BigMatrix);
 
-@time ma57_factorize!(BigMatrix);
-@time x = ma57_solve(BigMatrix, d);
+
+#################################################
+
+BigMatrix_57 = Ma57(BigMatrix);
+
+@time ma57_factorize!(BigMatrix_57);
+@time x = ma57_solve(BigMatrix_57, d);
 
 norm(x - x_true)
 
+#################################################
+
+@time LDLT = ldl(BigMatrix);  # LDLᵀ factorization of A
+
+@time x = LDLT \ d;  # solves Ax = b
+
+norm(x - x_true)
 
 #*********************
 data = initialize(N, m, n, P, A_list, B_list, level);
