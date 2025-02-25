@@ -2,7 +2,7 @@ module TriDiagBlockNested
 
 using LinearAlgebra
 
-export TriDiagBlockDataNested, factorize, solve
+export TriDiagBlockDataNested, initialize, factorize, solve
 
 mutable struct TriDiagBlockDataNested{ #TODO create initialize function
     T, 
@@ -46,6 +46,151 @@ mutable struct TriDiagBlockDataNested{ #TODO create initialize function
     next_x::MU
 
 end
+
+function initialize(N, m, n, P, A_list, B_list, level)
+
+    I_separator = 1:(m+1):N
+
+    LHS_A_list = zeros(P, n, n);
+    LHS_B_list = zeros(P-1, n, n);
+
+    MA_list = zeros(P-1, m*n, m*n);
+
+    RHS = zeros(P * n);
+
+    MA_chol = UpperTriangular(zeros(m*n, m*n));
+    LHS_chol = UpperTriangular(zeros(P*n, P*n));
+
+    factor_list = zeros(P-1, m*n, 2*n);
+
+    M_n_1 = similar(A_list, n, n);
+    M_n_2 = similar(A_list, n, n);
+    U_mn = UpperTriangular(zeros(m*n, m*n));
+
+    M_2n = similar(A_list, 2*n, 2*n);
+    M_mn_2n_1 = zeros(m*n, 2*n);
+    M_mn_2n_2 = zeros(m*n, 2*n);
+
+    U_n = UpperTriangular(zeros(n, n));
+
+    v_n = zeros(2*n);
+
+    next_idx = Int[]
+
+    for j = I_separator
+
+        append!(next_idx, (j-1)*n+1:j*n)
+        
+    end
+
+    next_x = zeros(P*n);
+
+    data = TriDiagBlockDataNested(
+        N, 
+        m, 
+        n, 
+        P, 
+        I_separator, 
+        A_list, 
+        B_list,
+        LHS_A_list,
+        LHS_B_list,
+        MA_list,
+        factor_list,
+        RHS,
+        MA_chol,
+        LHS_chol,
+        M_n_1,
+        M_n_2,
+        M_2n,
+        M_mn_2n_1,
+        M_mn_2n_2,
+        U_n,
+        U_mn,
+        nothing,
+        next_idx,
+        next_x
+    );
+
+    prev_data = data;
+
+    for i = 2:level
+
+        N = P;
+        m = 2;
+        P = Int((N + m) / (m+1));
+
+        I_separator = 1:(m+1):N
+
+        LHS_A_list = zeros(P, n, n);
+        LHS_B_list = zeros(P-1, n, n);
+
+        MA_list = zeros(P-1, m*n, m*n);
+
+        RHS = zeros(P * n);
+
+        MA_chol = UpperTriangular(zeros(m*n, m*n));
+        LHS_chol = UpperTriangular(zeros(P*n, P*n));
+
+        factor_list = zeros(P-1, m*n, 2*n);
+
+        M_n_1 = similar(A_list, n, n);
+        M_n_2 = similar(A_list, n, n);
+        U_mn = UpperTriangular(zeros(m*n, m*n));
+
+        M_2n = similar(A_list, 2*n, 2*n);
+        M_mn_2n_1 = zeros(m*n, 2*n);
+        M_mn_2n_2 = zeros(m*n, 2*n);
+
+        U_n = UpperTriangular(zeros(n, n));
+
+        v_n = zeros(2*n);
+
+        next_idx = Int[]
+
+        for j = I_separator
+
+            append!(next_idx, (j-1)*n+1:j*n)
+            
+        end
+
+        next_x = zeros(P*n);
+
+        next_data = TriDiagBlockDataNested(
+            N, 
+            m, 
+            n, 
+            P, 
+            I_separator,
+            A_list, 
+            B_list,
+            LHS_A_list,
+            LHS_B_list,
+            MA_list,
+            factor_list,
+            RHS,
+            MA_chol,
+            LHS_chol,
+            M_n_1,
+            M_n_2,
+            M_2n,
+            M_mn_2n_1,
+            M_mn_2n_2,
+            U_n,
+            U_mn,
+            nothing,
+            next_idx,
+            next_x,
+            );
+
+        prev_data.NextData = next_data;
+        prev_data = next_data;
+    end
+
+    return data
+
+end
+
 
 function cholesky_factorize(A_list, B_list, M_chol, A, B, U, N, n)
 
