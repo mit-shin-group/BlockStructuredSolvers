@@ -5,6 +5,8 @@ using HSL
 
 import Pkg
 include("TriDiagBlockNestedv2.jl")
+import .TriDiagBlockNested: TriDiagBlockDataNested, initialize, factorize, solve
+
 include("benchmark_utils.jl")
 
 using Statistics, Printf
@@ -73,8 +75,8 @@ function benchmark_factorization_and_solve(N, n, m, P, level, iter)
     ldl_factor_times = Float64[]
     ldl_solve_times = Float64[]
 
-    custom_factor_times = Float64[]
-    custom_solve_times = Float64[]
+    our_factor_times = Float64[]
+    our_solve_times = Float64[]
 
     for i = 1:iter
         # Generate problem instance
@@ -112,26 +114,26 @@ function benchmark_factorization_and_solve(N, n, m, P, level, iter)
         push!(ldl_solve_times, ldl_solve_time)
 
         #################################################
-        # **Method 4: Custom Solver**
+        # **Method 4: Our Solver**
         #################################################
         data = initialize(N, m, n, P, A_list, B_list, level)
 
-        custom_factor_time = @elapsed factorize(data)
+        our_factor_time = @elapsed factorize(data)
 
         x = zeros(data.N * n)
-        custom_solve_time = @elapsed solve(data, d, x)
+        our_solve_time = @elapsed solve(data, d, x)
 
-        push!(custom_factor_times, custom_factor_time)
-        push!(custom_solve_times, custom_solve_time)
+        push!(our_factor_times, our_factor_time)
+        push!(our_solve_times, our_solve_time)
     end
 
     # Compute and print the average times
     println("Average Factorization and Solve Times over ", iter, " Runs:")
     println("---------------------------------------------------")
-    @printf("MA57 - Factorize: %.6fs, Solve: %.6fs\n", mean(ma57_factor_times), mean(ma57_solve_times))
-    @printf("Cholesky - Factorize: %.6fs, Solve: %.6fs\n", mean(chol_factor_times), mean(chol_solve_times))
-    @printf("LDLᵀ - Factorize: %.6fs, Solve: %.6fs\n", mean(ldl_factor_times), mean(ldl_solve_times))
-    @printf("Custom - Factorize: %.6fs, Solve: %.6fs\n", mean(custom_factor_times), mean(custom_solve_times))
+    @printf("MA57 - Factorize: %.6f ms, Solve: %.6f ms\n", mean(ma57_factor_times) * 1000, mean(ma57_solve_times) * 1000)
+    @printf("Cholesky - Factorize: %.6f ms, Solve: %.6f ms\n", mean(chol_factor_times) * 1000, mean(chol_solve_times) * 1000)
+    @printf("LDLᵀ - Factorize: %.6f ms, Solve: %.6f ms\n", mean(ldl_factor_times) * 1000, mean(ldl_solve_times) * 1000)
+    @printf("Ours - Factorize: %.6f ms, Solve: %.6f ms\n", mean(our_factor_times) * 1000, mean(our_solve_times) * 1000)
 end
 
 
