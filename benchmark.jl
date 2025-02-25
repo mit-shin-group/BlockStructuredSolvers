@@ -1,4 +1,4 @@
-using LinearAlgebra, SparseArrays, BlockArrays
+using LinearAlgebra, SparseArrays, BlockArrays, SuiteSparse
 
 using LDLFactorizations
 using HSL
@@ -83,6 +83,16 @@ BigMatrix_57 = Ma57(BigMatrix);
 
 @time ma57_factorize!(BigMatrix_57);
 @time x = ma57_solve(BigMatrix_57, d);
+
+norm(x - x_true)
+
+#################################################
+
+BigMatrix_sparse = SparseMatrixCSC(BigMatrix);
+
+@time F = cholesky(BigMatrix_sparse);
+
+@time x = F \ d;
 
 norm(x - x_true)
 
