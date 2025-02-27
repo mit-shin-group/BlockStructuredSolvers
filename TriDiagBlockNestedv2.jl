@@ -1,6 +1,7 @@
 module TriDiagBlockNested
 
 using LinearAlgebra
+using Distributed
 
 export TriDiagBlockDataNested, initialize, factorize, solve
 
@@ -210,7 +211,8 @@ function cholesky_factorize(A_list, B_list, M_chol, A, B, U, N, n)
         copyto!(A, view(A_list, i, :, :))
 
         # Compute Schur complement
-        mul!(A, B', B, -1.0, 1.0)
+        # mul!(A, B', B, -1.0, 1.0)
+        BLAS.gemm!('T', 'N', -1.0, B, B, 1.0, A)
         
         # Compute Cholesky factor for current block
         cholesky!(Hermitian(A));
@@ -305,88 +307,157 @@ end
 
 end
 
-function solve(
-    data::TriDiagBlockDataNested,
-    d,
-    x
-)
+# function solve(
+#     data::TriDiagBlockDataNested,
+#     d,
+#     x
+# )
 
-P = data.P
-n = data.n
+# P = data.P
+# n = data.n
 
-I_separator = data.I_separator
+# I_separator = data.I_separator
 
-B_list = data.B_list
+# B_list = data.B_list
 
-MA_chol_list = data.MA_chol_list
+# MA_chol_list = data.MA_chol_list
 
-factor_list = data.factor_list
+# factor_list = data.factor_list
 
-B = data.M_n_2
-U = data.U_mn
-M_mn_2n_1 = data.M_mn_2n_1
+# B = data.M_n_2
+# U = data.U_mn
+# M_mn_2n_1 = data.M_mn_2n_1
 
-RHS = data.RHS
+# RHS = data.RHS
 
-# Assign RHS from d
-for j = 1:P
+# # Assign RHS from d
+# @inbounds for j = 1:P
 
-    copyto!(view(RHS, (j-1)*n+1:j*n),  view(d, I_separator[j]*n-n+1:I_separator[j]*n)) # d_list[I_separator[j], :]
+#     copyto!(view(RHS, (j-1)*n+1:j*n),  view(d, I_separator[j]*n-n+1:I_separator[j]*n)) # d_list[I_separator[j], :]
 
-end
+# end
 
-# Compute RHS from Schur complement
-for i = 1:P-1
+# # Compute RHS from Schur complement
+# @inbounds for i = 1:P-1
 
-    copyto!(M_mn_2n_1, view(factor_list, i, :, :))
-    mul!(view(RHS, (i-1)*n+1:(i+1)*n), M_mn_2n_1', view(d, I_separator[i]*n+1:I_separator[i+1]*n-n), -1.0, 1.0)
+#     copyto!(M_mn_2n_1, view(factor_list, i, :, :))
+#     mul!(view(RHS, (i-1)*n+1:(i+1)*n), M_mn_2n_1', view(d, I_separator[i]*n+1:I_separator[i+1]*n-n), -1.0, 1.0)
 
-end
+# end
 
-# RHS = invLHS * RHS; #TODO lmul! which is faster?
+# # RHS = invLHS * RHS; #TODO lmul! which is faster?
 
-if isnothing(data.NextData)
+# if isnothing(data.NextData)
 
-    LHS_chol = data.LHS_chol
-    ldiv!(LHS_chol', RHS)
-    ldiv!(LHS_chol, RHS)
+#     LHS_chol = data.LHS_chol
+#     ldiv!(LHS_chol', RHS)
+#     ldiv!(LHS_chol, RHS)
 
-    # Assign RHS to x solution for separators
-    for i = 1:P
+#     # Assign RHS to x solution for separators
+#     @inbounds for i = 1:P
 
-        copyto!(view(x, I_separator[i]*n-n+1:I_separator[i]*n), view(RHS, (i-1)*n+1:i*n))
+#         copyto!(view(x, I_separator[i]*n-n+1:I_separator[i]*n), view(RHS, (i-1)*n+1:i*n))
     
+#     end
+
+# else
+
+#     copyto!(data.next_x, view(x, data.next_idx))
+#     solve(data.NextData, RHS, data.next_x)
+#     copyto!(view(x, data.next_idx), data.next_x)
+
+# end
+
+# # Update d after Schur solve
+# @inbounds for j = 1:P-1 #TODO remove B
+
+#     copyto!(B, view(B_list, I_separator[j], :, :))
+#     BLAS.gemm!('T', 'N', -1.0, B, view(x, I_separator[j]*n-n+1:I_separator[j]*n), 1.0, view(d, I_separator[j]*n+1:I_separator[j]*n+n))
+#     # mul!(view(d, I_separator[j]*n+1:I_separator[j]*n+n,), B, view(x, I_separator[j]*n-n+1:I_separator[j]*n), -1.0, 1.0)
+
+#     copyto!(B, view(B_list, I_separator[j+1]-1, :, :))
+#     mul!(view(d, I_separator[j+1]*n-n-n+1:I_separator[j+1]*n-n), B, view(x, I_separator[j+1]*n-n+1:I_separator[j+1]*n), -1.0, 1.0)
+
+# end
+
+# # solve for non-separators
+# @inbounds for i = 1:P-1
+
+#     copyto!(U, view(MA_chol_list, i, :, :))
+#     ldiv!(U', view(d, I_separator[i]*n+1:I_separator[i+1]*n-n))
+#     ldiv!(U, view(d, I_separator[i]*n+1:I_separator[i+1]*n-n))
+#     copyto!(view(x, I_separator[i]*n+1:I_separator[i+1]*n-n), view(d, I_separator[i]*n+1:I_separator[i+1]*n-n))
+
+# end
+
+# return nothing
+
+# end
+
+function solve(data::TriDiagBlockDataNested, d, x)
+    P = data.P
+    n = data.n
+
+    I_separator = data.I_separator
+    B_list = data.B_list
+    MA_chol_list = data.MA_chol_list
+    factor_list = data.factor_list
+
+    B = data.M_n_2
+    U = data.U_mn
+    M_mn_2n_1 = data.M_mn_2n_1
+
+    RHS = data.RHS
+
+    # Assign RHS from d
+    @inbounds for j = 1:P
+        view(RHS, (j-1)*n+1:j*n) .= view(d, I_separator[j]*n-n+1:I_separator[j]*n)
     end
 
-else
+    # Compute RHS from Schur complement
+    @inbounds for i = 1:P-1
+        M_mn_2n_1 .= view(factor_list, i, :, :)
+        mul!(view(RHS, (i-1)*n+1:(i+1)*n), M_mn_2n_1', view(d, I_separator[i]*n+1:I_separator[i+1]*n-n), -1.0, 1.0)
+    end
 
-    copyto!(data.next_x, view(x, data.next_idx))
-    solve(data.NextData, RHS, data.next_x)
-    copyto!(view(x, data.next_idx), data.next_x)
+    # Solve system
+    if isnothing(data.NextData)
+        LHS_chol = data.LHS_chol
+        # ldiv!(LHS_chol', RHS)
+        # ldiv!(LHS_chol, RHS)
 
+        LAPACK.trtrs!('U', 'T', 'N', LHS_chol.data, RHS) #TODO replace trtrs! with custome algorithm
+        LAPACK.trtrs!('U', 'N', 'N', LHS_chol.data, RHS)
+
+        # Assign RHS to x for separators
+        @inbounds for i = 1:P
+            view(x, I_separator[i]*n-n+1:I_separator[i]*n) .= view(RHS, (i-1)*n+1:i*n)
+        end
+    else
+        data.next_x .= view(x, data.next_idx)
+        solve(data.NextData, RHS, data.next_x)
+        view(x, data.next_idx) .= data.next_x
+    end
+
+    # Update d after Schur solve
+    @inbounds for j = 1:P-1
+        B .= view(B_list, I_separator[j], :, :)
+        BLAS.gemm!('T', 'N', -1.0, B, view(x, I_separator[j]*n-n+1:I_separator[j]*n), 1.0, view(d, I_separator[j]*n+1:I_separator[j]*n+n))
+
+        B .= view(B_list, I_separator[j+1]-1, :, :)
+        mul!(view(d, I_separator[j+1]*n-n-n+1:I_separator[j+1]*n-n), B, view(x, I_separator[j+1]*n-n+1:I_separator[j+1]*n), -1.0, 1.0)
+    end
+
+    # Solve for non-separators
+    @inbounds for i = 1:P-1
+        U .= view(MA_chol_list, i, :, :)
+        ldiv!(U', view(d, I_separator[i]*n+1:I_separator[i+1]*n-n))
+        ldiv!(U, view(d, I_separator[i]*n+1:I_separator[i+1]*n-n))
+        view(x, I_separator[i]*n+1:I_separator[i+1]*n-n) .= view(d, I_separator[i]*n+1:I_separator[i+1]*n-n)
+    end
+
+    return nothing
 end
 
-# Update d after Schur solve
-for j = 1:P-1 #TODO remove B
-
-    copyto!(B, view(B_list, I_separator[j], :, :)')
-    mul!(view(d, I_separator[j]*n+1:I_separator[j]*n+n,), B, view(x, I_separator[j]*n-n+1:I_separator[j]*n), -1.0, 1.0)
-
-    copyto!(B, view(B_list, I_separator[j+1]-1, :, :))
-    mul!(view(d, I_separator[j+1]*n-n-n+1:I_separator[j+1]*n-n), B, view(x, I_separator[j+1]*n-n+1:I_separator[j+1]*n), -1.0, 1.0)
-
-end
-
-# solve for non-separators
-for i = 1:P-1
-
-    copyto!(U, view(MA_chol_list, i, :, :))
-    ldiv!(U', view(d, I_separator[i]*n+1:I_separator[i+1]*n-n))
-    ldiv!(U, view(d, I_separator[i]*n+1:I_separator[i+1]*n-n))
-    copyto!(view(x, I_separator[i]*n+1:I_separator[i+1]*n-n), view(d, I_separator[i]*n+1:I_separator[i+1]*n-n))
-
-end
-
-end
 
 end
