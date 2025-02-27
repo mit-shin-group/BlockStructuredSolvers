@@ -1,13 +1,14 @@
 using LinearAlgebra
 
 import Pkg
-include("TriDiagBlockv3.jl")
-import .TriDiagBlockv3: TriDiagBlockDatav3, factorize, solve
+include("TriDiagBlockNestedv3.jl")
+import .TriDiagBlockNested: TriDiagBlockDataNested, initialize, factorize, solve
 
 n = 10 # size of each block
-P = 50 # number of separators
-m = 3 # number of blocks between separators
-N = P + (P - 1) * m # number of diagonal blocks
+# P = 17 # number of separators
+m = 2 # number of blocks between separators
+N = 55 # number of diagonal blocks
+P = Int((N + m) / (m+1))
 
 #######################################
 A_list = zeros(N, n, n);
@@ -44,185 +45,81 @@ end
 
 x_true = reshape(x_true', N*n);
 
-I_separator = 1:(m+1):N
+#################################################
 
-U_A_list = zeros(P-1, m, n, n);
-U_B_list = zeros(P-1, m-1, n, n);
-LHS_A_list = zeros(P, n, n);
-LHS_B_list = zeros(P-1, n, n);
-LHS_U_A_list = zeros(P, n, n);
-LHS_U_B_list = zeros(P-1, n, n);
-
-invMA_list = zeros(P-1, m*n, m*n);
-
-invMA = zeros(m*n, m*n);
-invLHS = zeros(P*n, P*n);
-invMA_chol = UpperTriangular(zeros(m*n, m*n));
-invLHS_chol = UpperTriangular(zeros(P*n, P*n));
-
-A = similar(A_list, n, n);
-B = similar(A_list, n, n);
-C = similar(A_list, n, n);
-D = similar(A_list, n, m*n);
-E = similar(A_list, m*n, m*n);
-
-D1 = similar(A_list, m*n);
-D2 = similar(A_list, n);
-D3 = similar(A_list, n);
-D4 = similar(A_list, m*n);
-
-L = LowerTriangular(zeros(n, n));
-U = UpperTriangular(zeros(n, n));
-
-data = TriDiagBlockDatav3(
-    N, 
-    m, 
-    n, 
-    P, 
-    I_separator, 
-    A_list, 
-    B_list,
-    U_A_list,
-    U_B_list,
-    LHS_A_list,
-    LHS_B_list,
-    LHS_U_A_list,
-    LHS_U_B_list,
-    invMA_list,
-    invMA,
-    invLHS,
-    invMA_chol,
-    invLHS_chol,
-    A,
-    B,
-    C,
-    D,
-    E,
-    L,
-    U,
-    D1,
-    D2,
-    D3,
-    D4
-    );
+data = initialize(N, m, n, P, A_list, B_list, 1);
 
 @time factorize(data);
+x = zeros(data.N * n);
 
-MRHS = zeros(P*n, P*n);
+@time solve(data, d, x);
 
-B = randn(n, n);
+#################################################
 
-for i = 1:P-1
-    MRHS[(i-1)*n+1:i*n, (i-1)*n+1:i*n] = LHS_U_A_list[i, :, :]
-    MRHS[(i-1)*n+1:i*n, (i-1)*n+n+1:i*n+n] = LHS_U_B_list[i, :, :]
+M_chol_A_list = data.LHS_chol_A_list;
+M_chol_B_list = data.LHS_chol_B_list;
+
+NN = size(M_chol_A_list, 1)  # Number of block rows
+
+# Initialize full matrix with zeros
+M = zeros(NN * n, NN * n);
+
+# Fill diagonal blocks A
+for i in 1:NN
+    row_idx = (i-1) * n + 1 : i * n
+    M[row_idx, row_idx] = M_chol_A_list[i, :, :]  # Place A[i] on the diagonal
 end
 
-MRHS[(P-1)*n+1:P*n, (P-1)*n+1:P*n] = LHS_U_A_list[P, :, :]
+# Fill lower off-diagonal blocks B
+for i in 1:NN-1
+    col_idx = i * n + 1 : (i+1) * n
+    row_idx = (i-1) * n + 1 : i * n
+    M[row_idx, col_idx] = M_chol_B_list[i, :, :]  # Place B[i] in lower off-diagonal
+end
 
-MLHS = zeros(P*n, P*n);
-MLHS[1:n, n+1:2*n] = B;
 
-sol = MRHS' \ MLHS;
-sol = MRHS \ sol;
+temp_result = M' \ data.RHS;
 
-temp = zeros(P * n, n);
+#################################################
 
-# copyto!(U, view(LHS_U_A_list, 1, :, :))
-# ldiv!(A, U', B)
-# copyto!(view(temp, 1:n, :), A)
 
-# for i = 1:P-1
 
-#     mul!(B, view(LHS_U_B_list, i, :, :), A, -1.0, 0.0)
+A = data.M_n_1;
+B = data.M_n_2;
 
-#     copyto!(U, view(LHS_U_A_list, i+1, :, :))
-#     ldiv!(A, U', B)
-#     copyto!(view(temp, i*n+1:(i+1)*n, :), A)
+d = data.RHS;
+u = zeros(n);
+v = zeros(n);
 
-# end
 
-# copyto!(B, view(temp, (P-1)*n+1:P*n, :))
-# copyto!(U, view(LHS_U_A_list, P, :, :))
-# ldiv!(A, U, B)
-# copyto!(view(temp, (P-1)*n+1:P*n, :), A)
+function cholesky_solve(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n)
+    A .= view(M_chol_A_list, 1, :, :);
+    v .= view(d, 1:n)
 
-# for i = P-1:-1:1
+    LAPACK.trtrs!('U', 'T', 'N', A, v);
 
-#     copyto!(B, view(temp, (i-1)*n+1:i*n, :))
-#     mul!(B, view(LHS_U_B_list, i, :, :), A, -1.0, 1.0)
+    view(d, 1:n) .= v;
 
-#     copyto!(U, view(LHS_U_A_list, i, :, :))
-#     ldiv!(A, U, B)
-#     copyto!(view(temp, (i-1)*n+1:i*n, :), A)
+    for i = 2:N
 
-# end
+        A .= view(M_chol_B_list, i-1, :, :);
 
-# function cholesky_solve(temp, LHS_U_A_list, LHS_U_B_list, B, U, A, P, n)
+        u .= v
+        v .= view(d, (i-1)*n+1:i*n)
 
-#     copyto!(U, view(LHS_U_A_list, 1, :, :))
-#     ldiv!(A, U', B)
-#     copyto!(view(temp, 1:n, :), A)
+        BLAS.gemm!('T', 'N', -1.0, A, u, 1.0, v)
 
-#     for i = 1:P-1
-
-#         mul!(B, view(LHS_U_B_list, i, :, :), A, -1.0, 0.0)
-
-#         copyto!(U, view(LHS_U_A_list, i+1, :, :))
-#         ldiv!(A, U', B)
-#         copyto!(view(temp, i*n+1:(i+1)*n, :), A)
-
-#     end
-
-#     copyto!(B, view(temp, (P-1)*n+1:P*n, :))
-#     copyto!(U, view(LHS_U_A_list, P, :, :))
-#     ldiv!(A, U, B)
-#     copyto!(view(temp, (P-1)*n+1:P*n, :), A)
-
-#     for i = P-1:-1:1
-
-#         copyto!(B, view(temp, (i-1)*n+1:i*n, :))
-#         mul!(B, view(LHS_U_B_list, i, :, :), A, -1.0, 1.0)
-
-#         copyto!(U, view(LHS_U_A_list, i, :, :))
-#         ldiv!(A, U, B)
-#         copyto!(view(temp, (i-1)*n+1:i*n, :), A)
-
-#     end
-
-# end
-
-function cholesky_solve(temp, LHS_U_A_list, LHS_U_B_list, B, U, A, P, n)
-
-    copyto!(U, view(LHS_U_A_list, 1, :, :))
-    ldiv!(A, U', B)
-    copyto!(view(temp, 1:n, :), A)
-
-    for i = 1:P-1
-
-        mul!(B, view(LHS_U_B_list, i, :, :), A, -1.0, 0.0)
-
-        copyto!(U, view(LHS_U_A_list, i+1, :, :))
-        ldiv!(A, U', B)
-        copyto!(view(temp, i*n+1:(i+1)*n, :), A)
-
-    end
-
-    copyto!(B, view(temp, (P-1)*n+1:P*n, :))
-    copyto!(U, view(LHS_U_A_list, P, :, :))
-    ldiv!(A, U, B)
-    copyto!(view(temp, (P-1)*n+1:P*n, :), A)
-
-    for i = P-1:-1:1
-
-        copyto!(B, view(temp, (i-1)*n+1:i*n, :))
-        mul!(B, view(LHS_U_B_list, i, :, :), A, -1.0, 1.0)
-
-        copyto!(U, view(LHS_U_A_list, i, :, :))
-        ldiv!(A, U, B)
-        copyto!(view(temp, (i-1)*n+1:i*n, :), A)
+        A .= view(M_chol_A_list, i, :, :);
+        LAPACK.trtrs!('U', 'T', 'N', A, v)
+        view(d, (i-1)*n+1:i*n) .= v
 
     end
 
 end
 
-cholesky_solve(temp, LHS_U_A_list, LHS_U_B_list, B, U, A, P, n)
+cholesky_solve(M_chol_A_list, M_chol_B_list, d, A, u, v, 19, n)
+
+
+d - temp_result
+
+
