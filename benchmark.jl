@@ -13,11 +13,11 @@ using Statistics, Printf
 
 ######
 
-n = 50 # size of each block
+n = 20 # size of each block
 m = 2 # number of blocks between separators
-N = 55 # number of diagonal blocks
+N = 1000 # number of diagonal blocks
 P = Int((N + m) / (m+1)) # number of separators
-level = 3; # number of nested level
+level = 1; # number of nested level
 
 function benchmark_factorization_and_solve(N, n, m, P, level, iter)
     # Storage for times
