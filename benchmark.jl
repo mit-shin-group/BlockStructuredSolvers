@@ -4,7 +4,7 @@ using LDLFactorizations
 using HSL
 
 import Pkg
-include("TriDiagBlockNestedv2.jl")
+include("TriDiagBlockNestedv3.jl")
 import .TriDiagBlockNested: TriDiagBlockDataNested, initialize, factorize, solve
 
 include("benchmark_utils.jl")
@@ -53,7 +53,7 @@ function benchmark_factorization_and_solve(N, n, m, P, level, iter)
         #################################################
         BigMatrix_sparse = SparseMatrixCSC(BigMatrix)
 
-        chol_factor_time = @elapsed F = cholesky(BigMatrix_sparse)
+        chol_factor_time = @elapsed F = cholesky(BigMatrix_sparse) #TODO, pre allocate F
         chol_solve_time = @elapsed x = F \ d
 
         push!(chol_factor_times, chol_factor_time)
@@ -62,7 +62,7 @@ function benchmark_factorization_and_solve(N, n, m, P, level, iter)
         #################################################
         # **Method 3: LDLᵀ Factorization**
         #################################################
-        ldl_factor_time = @elapsed LDLT = ldl(BigMatrix)
+        ldl_factor_time = @elapsed LDLT = ldl(BigMatrix) # pre allocate LDLT, separate factorize
         ldl_solve_time = @elapsed x = LDLT \ d
 
         push!(ldl_factor_times, ldl_factor_time)

@@ -79,6 +79,7 @@ end
 
 
 temp_result = M' \ data.RHS;
+temp_result = M \ temp_result;
 
 #################################################
 
@@ -97,7 +98,6 @@ function cholesky_solve(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n)
     v .= view(d, 1:n)
 
     LAPACK.trtrs!('U', 'T', 'N', A, v);
-
     view(d, 1:n) .= v;
 
     for i = 2:N
@@ -115,9 +115,27 @@ function cholesky_solve(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n)
 
     end
 
+    LAPACK.trtrs!('U', 'N', 'N', A, v);
+    view(d, (N-1)*n+1:N*n) .= v;
+
+    for i = N-1:-1:1
+
+        A .= view(M_chol_B_list, i, :, :);
+
+        u .= v
+        v .= view(d, (i-1)*n+1:i*n)
+
+        BLAS.gemm!('N', 'N', -1.0, A, u, 1.0, v)
+
+        A .= view(M_chol_A_list, i, :, :);
+        LAPACK.trtrs!('U', 'N', 'N', A, v)
+        view(d, (i-1)*n+1:i*n) .= v
+
+    end
+
 end
 
-cholesky_solve(M_chol_A_list, M_chol_B_list, d, A, u, v, 19, n)
+@time cholesky_solve(M_chol_A_list, M_chol_B_list, d, A, u, v, 19, n)
 
 
 d - temp_result

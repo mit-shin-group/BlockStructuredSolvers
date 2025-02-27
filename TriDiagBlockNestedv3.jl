@@ -47,6 +47,9 @@ mutable struct TriDiagBlockDataNested{ #TODO create initialize function
     U_n::UpperTriangular{T, MS}
     U_mn::UpperTriangular{T, MS}
 
+    v_n_1::MU
+    v_n_2::MU
+
     NextData::Union{TriDiagBlockDataNested, Nothing}
 
     next_idx::Vector{Int}
@@ -86,7 +89,8 @@ function initialize(N, m, n, P, A_list, B_list, level)
 
     U_n = UpperTriangular(zeros(n, n));
 
-    v_n = zeros(2*n);
+    v_n_1 = zeros(n);
+    v_n_2 = zeros(n);
 
     next_idx = Int[]
 
@@ -124,6 +128,8 @@ function initialize(N, m, n, P, A_list, B_list, level)
         M_mn_2n_2,
         U_n,
         U_mn,
+        v_n_1,
+        v_n_2,
         nothing,
         next_idx,
         next_x
@@ -167,7 +173,8 @@ function initialize(N, m, n, P, A_list, B_list, level)
 
         U_n = UpperTriangular(zeros(n, n));
 
-        v_n = zeros(2*n);
+        v_n_1 = zeros(n);
+        v_n_2 = zeros(n);
 
         next_idx = Int[]
 
@@ -205,6 +212,8 @@ function initialize(N, m, n, P, A_list, B_list, level)
             M_mn_2n_2,
             U_n,
             U_mn,
+            v_n_1,
+            v_n_2,
             nothing,
             next_idx,
             next_x,
@@ -247,6 +256,48 @@ function cholesky_factorize(A_list, B_list, M_chol, M_chol_A_list, M_chol_B_list
         copyto!(U, UpperTriangular(A));
         copyto!(view(M_chol, (i-1)*n+1:i*n, (i-1)*n +1:i*n), U.data)
         copyto!(view(M_chol_A_list, i, :, :), U.data)
+
+    end
+
+end
+
+function cholesky_solve(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n)
+    A .= view(M_chol_A_list, 1, :, :);
+    v .= view(d, 1:n)
+
+    LAPACK.trtrs!('U', 'T', 'N', A, v);
+    view(d, 1:n) .= v;
+
+    for i = 2:N
+
+        A .= view(M_chol_B_list, i-1, :, :);
+
+        u .= v
+        v .= view(d, (i-1)*n+1:i*n)
+
+        BLAS.gemm!('T', 'N', -1.0, A, u, 1.0, v)
+
+        A .= view(M_chol_A_list, i, :, :);
+        LAPACK.trtrs!('U', 'T', 'N', A, v)
+        view(d, (i-1)*n+1:i*n) .= v
+
+    end
+
+    LAPACK.trtrs!('U', 'N', 'N', A, v);
+    view(d, (N-1)*n+1:N*n) .= v;
+
+    for i = N-1:-1:1
+
+        A .= view(M_chol_B_list, i, :, :);
+
+        u .= v
+        v .= view(d, (i-1)*n+1:i*n)
+
+        BLAS.gemm!('N', 'N', -1.0, A, u, 1.0, v)
+
+        A .= view(M_chol_A_list, i, :, :);
+        LAPACK.trtrs!('U', 'N', 'N', A, v)
+        view(d, (i-1)*n+1:i*n) .= v
 
     end
 
@@ -371,12 +422,13 @@ function solve(data::TriDiagBlockDataNested, d, x)
 
     # Solve system
     if isnothing(data.NextData)
-        LHS_chol = data.LHS_chol
-        # ldiv!(LHS_chol', RHS)
-        # ldiv!(LHS_chol, RHS)
 
-        LAPACK.trtrs!('U', 'T', 'N', LHS_chol.data, RHS) #TODO replace trtrs! with custome algorithm
-        LAPACK.trtrs!('U', 'N', 'N', LHS_chol.data, RHS)
+        u = data.v_n_1
+        v = data.v_n_2
+        LHS_chol_A_list = data.LHS_chol_A_list
+        LHS_chol_B_list = data.LHS_chol_B_list
+
+        cholesky_solve(LHS_chol_A_list, LHS_chol_B_list, RHS, B, u, v, P, n)
 
         # Assign RHS to x for separators
         @inbounds for i = 1:P
