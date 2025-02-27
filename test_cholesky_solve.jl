@@ -77,8 +77,8 @@ for i in 1:NN-1
     M[row_idx, col_idx] = M_chol_B_list[i, :, :]  # Place B[i] in lower off-diagonal
 end
 
-
-temp_result = M' \ data.RHS;
+H = repeat(data.RHS, 1, 2*n)
+temp_result = M' \ H;
 temp_result = M \ temp_result;
 
 #################################################
@@ -88,9 +88,51 @@ temp_result = M \ temp_result;
 A = data.M_n_1;
 B = data.M_n_2;
 
-d = data.RHS;
-u = zeros(n);
-v = zeros(n);
+d = H;
+u = zeros(n, 2*n);
+v = zeros(n, 2*n);
+
+function cholesky_solve_matrix(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n)
+    A .= view(M_chol_A_list, 1, :, :);
+    v .= view(d, 1:n, :)
+
+    LAPACK.trtrs!('U', 'T', 'N', A, v);
+    view(d, 1:n, :) .= v;
+
+    for i = 2:N
+
+        A .= view(M_chol_B_list, i-1, :, :);
+
+        u .= v
+        v .= view(d, (i-1)*n+1:i*n, :)
+
+        BLAS.gemm!('T', 'N', -1.0, A, u, 1.0, v)
+
+        A .= view(M_chol_A_list, i, :, :);
+        LAPACK.trtrs!('U', 'T', 'N', A, v)
+        view(d, (i-1)*n+1:i*n, :) .= v
+
+    end
+
+    LAPACK.trtrs!('U', 'N', 'N', A, v);
+    view(d, (N-1)*n+1:N*n, :) .= v;
+
+    for i = N-1:-1:1
+
+        A .= view(M_chol_B_list, i, :, :);
+
+        u .= v
+        v .= view(d, (i-1)*n+1:i*n, :)
+
+        BLAS.gemm!('N', 'N', -1.0, A, u, 1.0, v)
+
+        A .= view(M_chol_A_list, i, :, :);
+        LAPACK.trtrs!('U', 'N', 'N', A, v)
+        view(d, (i-1)*n+1:i*n, :) .= v
+
+    end
+
+end
 
 
 function cholesky_solve(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n)
@@ -135,7 +177,7 @@ function cholesky_solve(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n)
 
 end
 
-@time cholesky_solve(M_chol_A_list, M_chol_B_list, d, A, u, v, 19, n)
+@time cholesky_solve_matrix(M_chol_A_list, M_chol_B_list, d, A, u, v, 19, n)
 
 
 d - temp_result

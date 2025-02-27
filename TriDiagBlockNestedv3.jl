@@ -26,13 +26,9 @@ mutable struct TriDiagBlockDataNested{ #TODO create initialize function
     LHS_A_list::MT
     LHS_B_list::MT
 
-    MA_chol_list::MT
     factor_list::MT
 
     RHS::MU
-
-    MA_chol::UpperTriangular{T, MS}
-    LHS_chol::UpperTriangular{T, MS}
 
     MA_chol_A_list::MR
     MA_chol_B_list::MR
@@ -42,6 +38,8 @@ mutable struct TriDiagBlockDataNested{ #TODO create initialize function
     M_n_1::MS
     M_n_2::MS
     M_2n::MS
+    M_n_2n_1::MS
+    M_n_2n_2::MS
     M_mn_2n_1::MS
     M_mn_2n_2::MS
     U_n::UpperTriangular{T, MS}
@@ -68,9 +66,6 @@ function initialize(N, m, n, P, A_list, B_list, level)
 
     RHS = zeros(P * n);
 
-    MA_chol = UpperTriangular(zeros(m*n, m*n));
-    LHS_chol = UpperTriangular(zeros(P*n, P*n));
-
     MA_chol_A_list = zeros(P-1, m, n, n);
     MA_chol_B_list = zeros(P-1, m-1, n, n);
 
@@ -84,6 +79,8 @@ function initialize(N, m, n, P, A_list, B_list, level)
     U_mn = UpperTriangular(zeros(m*n, m*n));
 
     M_2n = similar(A_list, 2*n, 2*n);
+    M_n_2n_1 = zeros(n, 2*n);
+    M_n_2n_2 = zeros(n, 2*n);
     M_mn_2n_1 = zeros(m*n, 2*n);
     M_mn_2n_2 = zeros(m*n, 2*n);
 
@@ -112,11 +109,8 @@ function initialize(N, m, n, P, A_list, B_list, level)
         B_list,
         LHS_A_list,
         LHS_B_list,
-        MA_list,
         factor_list,
         RHS,
-        MA_chol,
-        LHS_chol,
         MA_chol_A_list,
         MA_chol_B_list,
         LHS_chol_A_list,
@@ -124,6 +118,8 @@ function initialize(N, m, n, P, A_list, B_list, level)
         M_n_1,
         M_n_2,
         M_2n,
+        M_n_2n_1,
+        M_n_2n_2,
         M_mn_2n_1,
         M_mn_2n_2,
         U_n,
@@ -148,12 +144,7 @@ function initialize(N, m, n, P, A_list, B_list, level)
         LHS_A_list = zeros(P, n, n);
         LHS_B_list = zeros(P-1, n, n);
 
-        MA_list = zeros(P-1, m*n, m*n);
-
         RHS = zeros(P * n);
-
-        MA_chol = UpperTriangular(zeros(m*n, m*n));
-        LHS_chol = UpperTriangular(zeros(P*n, P*n));
 
         MA_chol_A_list = zeros(P-1, m, n, n);
         MA_chol_B_list = zeros(P-1, m-1, n, n);
@@ -168,6 +159,8 @@ function initialize(N, m, n, P, A_list, B_list, level)
         U_mn = UpperTriangular(zeros(m*n, m*n));
 
         M_2n = similar(A_list, 2*n, 2*n);
+        M_n_2n_1 = zeros(n, 2*n);
+        M_n_2n_2 = zeros(n, 2*n);
         M_mn_2n_1 = zeros(m*n, 2*n);
         M_mn_2n_2 = zeros(m*n, 2*n);
 
@@ -196,11 +189,8 @@ function initialize(N, m, n, P, A_list, B_list, level)
             B_list,
             LHS_A_list,
             LHS_B_list,
-            MA_list,
             factor_list,
             RHS,
-            MA_chol,
-            LHS_chol,
             MA_chol_A_list,
             MA_chol_B_list,
             LHS_chol_A_list,
@@ -208,6 +198,8 @@ function initialize(N, m, n, P, A_list, B_list, level)
             M_n_1,
             M_n_2,
             M_2n,
+            M_n_2n_1,
+            M_n_2n_2,
             M_mn_2n_1,
             M_mn_2n_2,
             U_n,
@@ -228,12 +220,11 @@ function initialize(N, m, n, P, A_list, B_list, level)
 end
 
 
-function cholesky_factorize(A_list, B_list, M_chol, M_chol_A_list, M_chol_B_list, A, B, U, N, n)
+function cholesky_factorize(A_list, B_list, M_chol_A_list, M_chol_B_list, A, B, U, N, n)
 
     copyto!(A, view(A_list, 1, :, :))
     cholesky!(Hermitian(A))
     copyto!(U, UpperTriangular(A))
-    copyto!(view(M_chol, 1:n, 1:n), U.data)
     copyto!(view(M_chol_A_list, 1, :, :), U.data)
 
     # Iterate over remaining blocks
@@ -242,7 +233,6 @@ function cholesky_factorize(A_list, B_list, M_chol, M_chol_A_list, M_chol_B_list
         # Solve for L_{i, i-1}
         copyto!(A, view(B_list, i-1, :, :))
         ldiv!(B, U', A)
-        copyto!(view(M_chol, (i-1)*n-n+1:i*n-n, (i-1)*n +1:i*n), B)
         copyto!(view(M_chol_B_list, i-1, :, :), B)
 
         copyto!(A, view(A_list, i, :, :))
@@ -254,7 +244,6 @@ function cholesky_factorize(A_list, B_list, M_chol, M_chol_A_list, M_chol_B_list
         # Compute Cholesky factor for current block
         cholesky!(Hermitian(A));
         copyto!(U, UpperTriangular(A));
-        copyto!(view(M_chol, (i-1)*n+1:i*n, (i-1)*n +1:i*n), U.data)
         copyto!(view(M_chol_A_list, i, :, :), U.data)
 
     end
@@ -303,6 +292,48 @@ function cholesky_solve(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n)
 
 end
 
+function cholesky_solve_matrix(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n) #TODO merge two solves
+    A .= view(M_chol_A_list, 1, :, :);
+    v .= view(d, 1:n, :)
+
+    LAPACK.trtrs!('U', 'T', 'N', A, v);
+    view(d, 1:n, :) .= v;
+
+    for i = 2:N
+
+        A .= view(M_chol_B_list, i-1, :, :);
+
+        u .= v
+        v .= view(d, (i-1)*n+1:i*n, :)
+
+        BLAS.gemm!('T', 'N', -1.0, A, u, 1.0, v)
+
+        A .= view(M_chol_A_list, i, :, :);
+        LAPACK.trtrs!('U', 'T', 'N', A, v)
+        view(d, (i-1)*n+1:i*n, :) .= v
+
+    end
+
+    LAPACK.trtrs!('U', 'N', 'N', A, v);
+    view(d, (N-1)*n+1:N*n, :) .= v;
+
+    for i = N-1:-1:1
+
+        A .= view(M_chol_B_list, i, :, :);
+
+        u .= v
+        v .= view(d, (i-1)*n+1:i*n, :)
+
+        BLAS.gemm!('N', 'N', -1.0, A, u, 1.0, v)
+
+        A .= view(M_chol_A_list, i, :, :);
+        LAPACK.trtrs!('U', 'N', 'N', A, v)
+        view(d, (i-1)*n+1:i*n, :) .= v
+
+    end
+
+end
+
 function factorize(
     data::TriDiagBlockDataNested
 )
@@ -320,12 +351,9 @@ LHS_A_list = data.LHS_A_list
 LHS_B_list = data.LHS_B_list
 
 factor_list = data.factor_list
-MA_chol_list = data.MA_chol_list
 
 MA_chol_A_list = data.MA_chol_A_list
 MA_chol_B_list = data.MA_chol_B_list
-
-MA_chol = data.MA_chol
 
 A = data.M_n_1
 B = data.M_n_2
@@ -334,6 +362,8 @@ M_mn_2n_1 = data.M_mn_2n_1
 M_mn_2n_2 = data.M_mn_2n_2
 
 U = data.U_n
+u = data.M_n_2n_1
+v = data.M_n_2n_2
 
 @views for i = 1:P-1 #TODO get rid of views
 
@@ -341,7 +371,6 @@ U = data.U_n
     cholesky_factorize(
         A_list[I_separator[i]+1:I_separator[i]+m, :, :], 
         B_list[I_separator[i]+1:I_separator[i]+m-1, :, :], 
-        MA_chol,
         MA_chol_A_list[i, :, :, :],
         MA_chol_B_list[i, :, :, :],
         A,
@@ -350,15 +379,17 @@ U = data.U_n
         m, 
         n)
 
-    MA_chol_list[i, :, :] .= MA_chol
+    # MA_chol_list[i, :, :] .= MA_chol
     
     M_mn_2n_1[1:n, 1:n] .= B_list[I_separator[i], :, :]'
     M_mn_2n_1[m*n-n+1:m*n, n+1:2*n] .= B_list[I_separator[i+1]-1, :, :]
 
     M_mn_2n_2 .= M_mn_2n_1
 
-    ldiv!(MA_chol', M_mn_2n_2)
-    ldiv!(MA_chol, M_mn_2n_2)
+    # ldiv!(MA_chol', M_mn_2n_2)
+    # ldiv!(MA_chol, M_mn_2n_2)
+
+    cholesky_solve_matrix(MA_chol_A_list[i, :, :, :], MA_chol_B_list[i, :, :, :], M_mn_2n_2, A, u, v, m, n)
 
     factor_list[i, :, :] = M_mn_2n_2
 
@@ -378,11 +409,10 @@ copyto!(view(LHS_A_list, P, :, :), A)
 
 if isnothing(data.NextData)
 
-    LHS_chol = data.LHS_chol
     LHS_chol_A_list = data.LHS_chol_A_list
     LHS_chol_B_list = data.LHS_chol_B_list
 
-    cholesky_factorize(LHS_A_list, LHS_B_list, LHS_chol, LHS_chol_A_list, LHS_chol_B_list, A, B, U, P, n)
+    cholesky_factorize(LHS_A_list, LHS_B_list, LHS_chol_A_list, LHS_chol_B_list, A, B, U, P, n)
 
 else
 
@@ -395,12 +425,15 @@ end
 end
 
 function solve(data::TriDiagBlockDataNested, d, x)
+
     P = data.P
     n = data.n
+    m = data.m
 
     I_separator = data.I_separator
     B_list = data.B_list
-    MA_chol_list = data.MA_chol_list
+    MA_chol_A_list = data.MA_chol_A_list
+    MA_chol_B_list = data.MA_chol_B_list
     factor_list = data.factor_list
 
     B = data.M_n_2
@@ -408,6 +441,8 @@ function solve(data::TriDiagBlockDataNested, d, x)
     M_mn_2n_1 = data.M_mn_2n_1
 
     RHS = data.RHS
+    u = data.v_n_1
+    v = data.v_n_2
 
     # Assign RHS from d
     @inbounds for j = 1:P
@@ -423,8 +458,6 @@ function solve(data::TriDiagBlockDataNested, d, x)
     # Solve system
     if isnothing(data.NextData)
 
-        u = data.v_n_1
-        v = data.v_n_2
         LHS_chol_A_list = data.LHS_chol_A_list
         LHS_chol_B_list = data.LHS_chol_B_list
 
@@ -451,9 +484,8 @@ function solve(data::TriDiagBlockDataNested, d, x)
 
     # Solve for non-separators
     @inbounds for i = 1:P-1
-        U .= view(MA_chol_list, i, :, :)
-        ldiv!(U', view(d, I_separator[i]*n+1:I_separator[i+1]*n-n))
-        ldiv!(U, view(d, I_separator[i]*n+1:I_separator[i+1]*n-n))
+
+        cholesky_solve(view(MA_chol_A_list, i, :, :, :), view(MA_chol_B_list, i, :, :, :), view(d, I_separator[i]*n+1:I_separator[i+1]*n-n), B, u, v, m, n)
         view(x, I_separator[i]*n+1:I_separator[i+1]*n-n) .= view(d, I_separator[i]*n+1:I_separator[i+1]*n-n)
     end
 

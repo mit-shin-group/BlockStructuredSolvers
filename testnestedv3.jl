@@ -39,7 +39,7 @@ d = zeros(N * n);
 
 @views for i = 1:N
     
-    d[(i-1)*n+1:i*n] = d_list[i, :]
+    d[(i-1)*n+1:i*n] = d_list[i, :];
 
 end
 
