@@ -2,22 +2,21 @@ using LinearAlgebra, SparseArrays, BlockArrays, SuiteSparse
 
 using LDLFactorizations
 using HSL
+using BlockStructuredSolvers
 
 import Pkg
-include("src/TriDiagBlockNestedv2.jl")
-import .TriDiagBlockNested: TriDiagBlockDataNested, initialize, factorize, solve
-include("benchmark/benchmark_utils.jl")
+include("benchmark_utils.jl")
 
 using Statistics, Printf, ProgressBars
 
 
 ######
 
-n = 10 # size of each block
-m = 5 # number of blocks between separators
-N = 685 # number of diagonal blocks
+n = 100 # size of each block
+m = 2 # number of blocks between separators
+N = 55 # number of diagonal blocks
 P = Int((N + m) / (m+1)) # number of separators
-level = 2; # number of nested level
+level = 3; # number of nested level
 
 function benchmark_factorization_and_solve(N, n, m, P, level, iter)
     # Storage for times
@@ -73,10 +72,10 @@ function benchmark_factorization_and_solve(N, n, m, P, level, iter)
         #################################################
         data = initialize(N, m, n, P, A_list, B_list, level)
 
-        our_factor_time = @elapsed factorize(data)
+        our_factor_time = @elapsed factorize!(data)
 
         x = zeros(data.N * n)
-        our_solve_time = @elapsed solve(data, d, x)
+        our_solve_time = @elapsed solve!(data, d, x)
 
         push!(our_factor_times, our_factor_time)
         push!(our_solve_times, our_solve_time)
