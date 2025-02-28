@@ -1,9 +1,9 @@
-# TriDiagBlock.jl
+# BlockStructuredSolvers.jl
 
-![CI](https://github.com/mit-shin-group/TriDiagBlock/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/mit-shin-group/BlockStructuredSolvers/actions/workflows/ci.yml/badge.svg)
 
 ## Overview
-`TriDiagBlock.jl` is a Julia package for efficiently solving block tridiagonal systems using Cholesky factorization. The package is designed for structured linear algebra problems that arise in scientific computing and optimization.
+`BlockStructuredSolvers.jl` is a Julia package for efficiently solving block tridiagonal systems using Cholesky factorization. The package is designed for structured linear algebra problems that arise in scientific computing and optimization.
 
 ## Features
 - **Efficient Cholesky factorization** for block tridiagonal matrices
@@ -16,18 +16,18 @@ To install the package, clone the repository and add it to your Julia environmen
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/your-username/TriDiagBlock.jl")
+Pkg.add(url="https://github.com/your-username/BlockStructuredSolvers.jl")
 ```
 
 Alternatively, if developing locally:
 ```julia
-Pkg.develop(path="/path/to/TriDiagBlock")
+Pkg.develop(path="/path/to/BlockStructuredSolvers")
 ```
 
 ## Usage
 ### Importing the Package
 ```julia
-using TriDiagBlock
+using BlockStructuredSolvers
 ```
 
 ### Initializing a Block Tridiagonal System
@@ -58,13 +58,13 @@ solve(data, d, x)
 ```
 
 ## API Reference
-### `initialize(N, m, n, P, A_list, B_list, level) -> TriDiagBlockData`
+### `initialize(N, m, n, P, A_list, B_list, level) -> BlockStructuredSolversData`
 Creates and initializes a hierarchical block tridiagonal system.
 
-### `factorize(data::TriDiagBlockData)`
+### `factorize(data::BlockStructuredSolversData)`
 Performs Cholesky factorization on the system.
 
-### `solve(data::TriDiagBlockData, d, x)`
+### `solve(data::BlockStructuredSolversData, d, x)`
 Solves the block tridiagonal system given a right-hand side `d` and stores the solution in `x`.
 
 ## Performance Considerations
