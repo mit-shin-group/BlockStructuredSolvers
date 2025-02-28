@@ -1,6 +1,6 @@
 # TriDiagBlock.jl
 
-![CI](https://github.com/mit-shin-group/TriDiagBlock.jl/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/mit-shin-group/TriDiagBlock/actions/workflows/ci.yml/badge.svg)
 
 ## Overview
 `TriDiagBlock.jl` is a Julia package for efficiently solving block tridiagonal systems using Cholesky factorization. The package is designed for structured linear algebra problems that arise in scientific computing and optimization.
