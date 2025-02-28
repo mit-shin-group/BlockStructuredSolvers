@@ -1,8 +1,8 @@
 using Test
-using TriDiagBlock
+using BlockStructuredData
 using LinearAlgebra
 
-@testset "TriDiagBlock.jl" begin
+@testset "BlockStructuredData.jl" begin
 
     n = 100 # size of each block
     m = 2 # number of blocks between separators

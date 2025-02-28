@@ -1,10 +1,10 @@
-module TriDiagBlock
+module BlockStructuredSolvers
 
 using LinearAlgebra
 
-export TriDiagBlockData, initialize, factorize!, solve!
+export BlockStructuredData, initialize, factorize!, solve!
 
-mutable struct TriDiagBlockData{ #TODO create initialize function
+mutable struct BlockStructuredData{ #TODO create initialize function
     T, 
     MR <: AbstractArray{T, 4},
     MT <: AbstractArray{T, 3},
@@ -47,7 +47,7 @@ mutable struct TriDiagBlockData{ #TODO create initialize function
     v_n_1::MU
     v_n_2::MU
 
-    NextData::Union{TriDiagBlockData, Nothing}
+    NextData::Union{BlockStructuredData, Nothing}
 
     next_idx::Vector{Int}
     next_x::MU
@@ -98,7 +98,7 @@ function initialize(N, m, n, P, A_list, B_list, level)
 
     next_x = zeros(P*n);
 
-    data = TriDiagBlockData(
+    data = BlockStructuredData(
         N, 
         m, 
         n, 
@@ -178,7 +178,7 @@ function initialize(N, m, n, P, A_list, B_list, level)
 
         next_x = zeros(P*n);
 
-        next_data = TriDiagBlockData(
+        next_data = BlockStructuredData(
             N, 
             m, 
             n, 
@@ -334,7 +334,7 @@ function cholesky_solve_matrix(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n) #
 end
 
 function factorize!(
-    data::TriDiagBlockData
+    data::BlockStructuredData
 )
 
 P = data.P
@@ -423,7 +423,7 @@ end
 
 end
 
-function solve!(data::TriDiagBlockData, d, x)
+function solve!(data::BlockStructuredData, d, x)
 
     P = data.P
     n = data.n

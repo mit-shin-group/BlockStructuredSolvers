@@ -1,4 +1,4 @@
-name = "TriDiagBlock"
+name = "BlockStructuredData"
 uuid = "e294871a-52ed-424c-aac5-512b15cb83b5"
 authors = ["David Jin <jindavid@mit.edu>", "Sungho Shin <sushin@mit.edu>"]
 version = "0.1.0"
