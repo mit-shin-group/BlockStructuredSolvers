@@ -3,11 +3,10 @@ name: CI
 on:
   push:
     branches:
-      - main
       - proper_strucutre
   pull_request:
     branches:
-      - main
+      - proper_strucutre
 
 jobs:
   test:
