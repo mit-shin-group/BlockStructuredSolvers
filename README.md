@@ -1,6 +1,7 @@
 # BlockStructuredSolvers.jl
 
 ![CI](https://github.com/mit-shin-group/BlockStructuredSolvers/actions/workflows/ci.yml/badge.svg)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ## Overview
 `BlockStructuredSolvers.jl` is a Julia package for efficiently solving block tridiagonal systems using Cholesky factorization. The package is designed for structured linear algebra problems that arise in scientific computing and optimization.
@@ -75,7 +76,7 @@ Solves the block tridiagonal system given a right-hand side `d` and stores the s
 Contributions are welcome! Feel free to submit issues or pull requests on GitHub.
 
 ## License
-TODO
+This package is licensed under the MIT License. See the LICENSE file for details.
 
 ## Acknowledgments
 TODO
