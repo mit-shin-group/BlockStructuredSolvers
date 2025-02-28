@@ -1,6 +1,8 @@
 module BlockStructuredSolvers
 
-using LinearAlgebra
+using LinearAlgebra: ldiv!, mul!, cholesky!, UpperTriangular, Hermitian
+using LinearAlgebra.LAPACK: trtrs!
+using LinearAlgebra.BLAS: gemm!
 
 export BlockStructuredData, initialize, factorize!, solve!
 export BlockStructuredData_full_cholesky_factor, initialize_full_cholesky_factor, factorize_full_cholesky_factor!, solve_full_cholesky_factor!

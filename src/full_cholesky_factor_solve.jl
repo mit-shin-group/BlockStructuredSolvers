@@ -205,7 +205,7 @@ function cholesky_factorize_full_cholesky_factor(A_list, B_list, M_chol, A, B, U
 
         # Compute Schur complement
         # mul!(A, B', B, -1.0, 1.0)
-        BLAS.gemm!('T', 'N', -1.0, B, B, 1.0, A)
+        gemm!('T', 'N', -1.0, B, B, 1.0, A)
         
         # Compute Cholesky factor for current block
         cholesky!(Hermitian(A));
@@ -363,7 +363,7 @@ end
 # @inbounds for j = 1:P-1 #TODO remove B
 
 #     copyto!(B, view(B_list, I_separator[j], :, :))
-#     BLAS.gemm!('T', 'N', -1.0, B, view(x, I_separator[j]*n-n+1:I_separator[j]*n), 1.0, view(d, I_separator[j]*n+1:I_separator[j]*n+n))
+#     gemm!('T', 'N', -1.0, B, view(x, I_separator[j]*n-n+1:I_separator[j]*n), 1.0, view(d, I_separator[j]*n+1:I_separator[j]*n+n))
 #     # mul!(view(d, I_separator[j]*n+1:I_separator[j]*n+n,), B, view(x, I_separator[j]*n-n+1:I_separator[j]*n), -1.0, 1.0)
 
 #     copyto!(B, view(B_list, I_separator[j+1]-1, :, :))
@@ -417,8 +417,8 @@ function solve_full_cholesky_factor!(data::BlockStructuredData_full_cholesky_fac
         # ldiv!(LHS_chol', RHS)
         # ldiv!(LHS_chol, RHS)
 
-        LAPACK.trtrs!('U', 'T', 'N', LHS_chol.data, RHS) #TODO replace trtrs! with custome algorithm
-        LAPACK.trtrs!('U', 'N', 'N', LHS_chol.data, RHS)
+        trtrs!('U', 'T', 'N', LHS_chol.data, RHS) #TODO replace trtrs! with custome algorithm
+        trtrs!('U', 'N', 'N', LHS_chol.data, RHS)
 
         # Assign RHS to x for separators
         @inbounds for i = 1:P
@@ -433,7 +433,7 @@ function solve_full_cholesky_factor!(data::BlockStructuredData_full_cholesky_fac
     # Update d after Schur solve
     @inbounds for j = 1:P-1
         B .= view(B_list, I_separator[j], :, :)
-        BLAS.gemm!('T', 'N', -1.0, B, view(x, I_separator[j]*n-n+1:I_separator[j]*n), 1.0, view(d, I_separator[j]*n+1:I_separator[j]*n+n))
+        gemm!('T', 'N', -1.0, B, view(x, I_separator[j]*n-n+1:I_separator[j]*n), 1.0, view(d, I_separator[j]*n+1:I_separator[j]*n+n))
 
         B .= view(B_list, I_separator[j+1]-1, :, :)
         mul!(view(d, I_separator[j+1]*n-n-n+1:I_separator[j+1]*n-n), B, view(x, I_separator[j+1]*n-n+1:I_separator[j+1]*n), -1.0, 1.0)

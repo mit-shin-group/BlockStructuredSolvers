@@ -232,7 +232,7 @@ function cholesky_factorize(A_list, B_list, M_chol_A_list, M_chol_B_list, A, B, 
 
         # Compute Schur complement
         # mul!(A, B', B, -1.0, 1.0)
-        BLAS.gemm!('T', 'N', -1.0, B, B, 1.0, A)
+        gemm!('T', 'N', -1.0, B, B, 1.0, A)
         
         # Compute Cholesky factor for current block
         cholesky!(Hermitian(A));
@@ -247,7 +247,7 @@ function cholesky_solve(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n)
     A .= view(M_chol_A_list, 1, :, :);
     v .= view(d, 1:n)
 
-    LAPACK.trtrs!('U', 'T', 'N', A, v);
+    trtrs!('U', 'T', 'N', A, v);
     view(d, 1:n) .= v;
 
     for i = 2:N
@@ -257,15 +257,15 @@ function cholesky_solve(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n)
         u .= v
         v .= view(d, (i-1)*n+1:i*n)
 
-        BLAS.gemm!('T', 'N', -1.0, A, u, 1.0, v)
+        gemm!('T', 'N', -1.0, A, u, 1.0, v)
 
         A .= view(M_chol_A_list, i, :, :);
-        LAPACK.trtrs!('U', 'T', 'N', A, v)
+        trtrs!('U', 'T', 'N', A, v)
         view(d, (i-1)*n+1:i*n) .= v
 
     end
 
-    LAPACK.trtrs!('U', 'N', 'N', A, v);
+    trtrs!('U', 'N', 'N', A, v);
     view(d, (N-1)*n+1:N*n) .= v;
 
     for i = N-1:-1:1
@@ -275,10 +275,10 @@ function cholesky_solve(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n)
         u .= v
         v .= view(d, (i-1)*n+1:i*n)
 
-        BLAS.gemm!('N', 'N', -1.0, A, u, 1.0, v)
+        gemm!('N', 'N', -1.0, A, u, 1.0, v)
 
         A .= view(M_chol_A_list, i, :, :);
-        LAPACK.trtrs!('U', 'N', 'N', A, v)
+        trtrs!('U', 'N', 'N', A, v)
         view(d, (i-1)*n+1:i*n) .= v
 
     end
@@ -289,7 +289,7 @@ function cholesky_solve_matrix(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n) #
     A .= view(M_chol_A_list, 1, :, :);
     v .= view(d, 1:n, :)
 
-    LAPACK.trtrs!('U', 'T', 'N', A, v);
+    trtrs!('U', 'T', 'N', A, v);
     view(d, 1:n, :) .= v;
 
     for i = 2:N
@@ -299,15 +299,15 @@ function cholesky_solve_matrix(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n) #
         u .= v
         v .= view(d, (i-1)*n+1:i*n, :)
 
-        BLAS.gemm!('T', 'N', -1.0, A, u, 1.0, v)
+        gemm!('T', 'N', -1.0, A, u, 1.0, v)
 
         A .= view(M_chol_A_list, i, :, :);
-        LAPACK.trtrs!('U', 'T', 'N', A, v)
+        trtrs!('U', 'T', 'N', A, v)
         view(d, (i-1)*n+1:i*n, :) .= v
 
     end
 
-    LAPACK.trtrs!('U', 'N', 'N', A, v);
+    trtrs!('U', 'N', 'N', A, v);
     view(d, (N-1)*n+1:N*n, :) .= v;
 
     for i = N-1:-1:1
@@ -317,10 +317,10 @@ function cholesky_solve_matrix(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n) #
         u .= v
         v .= view(d, (i-1)*n+1:i*n, :)
 
-        BLAS.gemm!('N', 'N', -1.0, A, u, 1.0, v)
+        gemm!('N', 'N', -1.0, A, u, 1.0, v)
 
         A .= view(M_chol_A_list, i, :, :);
-        LAPACK.trtrs!('U', 'N', 'N', A, v)
+        trtrs!('U', 'N', 'N', A, v)
         view(d, (i-1)*n+1:i*n, :) .= v
 
     end
@@ -469,7 +469,7 @@ function solve!(data::BlockStructuredData, d, x)
     # Update d after Schur solve
     @inbounds for j = 1:P-1
         B .= view(B_list, I_separator[j], :, :)
-        BLAS.gemm!('T', 'N', -1.0, B, view(x, I_separator[j]*n-n+1:I_separator[j]*n), 1.0, view(d, I_separator[j]*n+1:I_separator[j]*n+n))
+        gemm!('T', 'N', -1.0, B, view(x, I_separator[j]*n-n+1:I_separator[j]*n), 1.0, view(d, I_separator[j]*n+1:I_separator[j]*n+n))
 
         B .= view(B_list, I_separator[j+1]-1, :, :)
         mul!(view(d, I_separator[j+1]*n-n-n+1:I_separator[j+1]*n-n), B, view(x, I_separator[j+1]*n-n+1:I_separator[j+1]*n), -1.0, 1.0)
