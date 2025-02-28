@@ -4,20 +4,21 @@ using LDLFactorizations
 using HSL
 
 import Pkg
-include("TriDiagBlockNestedv3.jl")
+include("TriDiagBlockNestedv2.jl")
 import .TriDiagBlockNested: TriDiagBlockDataNested, initialize, factorize, solve
 
 include("benchmark_utils.jl")
 
-using Statistics, Printf
+using Statistics, Printf, ProgressBars
+
 
 ######
 
-n = 20 # size of each block
-m = 2 # number of blocks between separators
-N = 1000 # number of diagonal blocks
+n = 10 # size of each block
+m = 5 # number of blocks between separators
+N = 685 # number of diagonal blocks
 P = Int((N + m) / (m+1)) # number of separators
-level = 1; # number of nested level
+level = 2; # number of nested level
 
 function benchmark_factorization_and_solve(N, n, m, P, level, iter)
     # Storage for times
@@ -33,7 +34,7 @@ function benchmark_factorization_and_solve(N, n, m, P, level, iter)
     our_factor_times = Float64[]
     our_solve_times = Float64[]
 
-    for i = 1:iter
+    for i = tqdm(1:iter)
         # Generate problem instance
         BigMatrix, d, x_true, A_list, B_list = generate_tridiagonal_system(N, n)
 
