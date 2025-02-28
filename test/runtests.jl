@@ -1,8 +1,8 @@
 using Test
-using BlockStructuredData
+using BlockStructuredSolvers
 using LinearAlgebra
 
-@testset "BlockStructuredData.jl" begin
+@testset "BlockStructuredSolvers.jl" begin
 
     n = 100 # size of each block
     m = 2 # number of blocks between separators
