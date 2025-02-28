@@ -7,7 +7,7 @@ using BlockStructuredSolvers
 import Pkg
 include("benchmark_utils.jl")
 
-using Statistics, Printf, ProgressBars
+using Printf, ProgressBars
 
 
 ######
