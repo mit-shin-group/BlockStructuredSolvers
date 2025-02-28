@@ -1,11 +1,10 @@
-module TriDiagBlockNested
+module TriDiagBlock
 
 using LinearAlgebra
-using Distributed
 
-export TriDiagBlockDataNested, initialize, factorize, solve
+export TriDiagBlockData, initialize, factorize, solve
 
-mutable struct TriDiagBlockDataNested{ #TODO create initialize function
+mutable struct TriDiagBlockData{ #TODO create initialize function
     T, 
     MR <: AbstractArray{T, 4},
     MT <: AbstractArray{T, 3},
@@ -48,7 +47,7 @@ mutable struct TriDiagBlockDataNested{ #TODO create initialize function
     v_n_1::MU
     v_n_2::MU
 
-    NextData::Union{TriDiagBlockDataNested, Nothing}
+    NextData::Union{TriDiagBlockData, Nothing}
 
     next_idx::Vector{Int}
     next_x::MU
@@ -99,7 +98,7 @@ function initialize(N, m, n, P, A_list, B_list, level)
 
     next_x = zeros(P*n);
 
-    data = TriDiagBlockDataNested(
+    data = TriDiagBlockData(
         N, 
         m, 
         n, 
@@ -179,7 +178,7 @@ function initialize(N, m, n, P, A_list, B_list, level)
 
         next_x = zeros(P*n);
 
-        next_data = TriDiagBlockDataNested(
+        next_data = TriDiagBlockData(
             N, 
             m, 
             n, 
@@ -335,7 +334,7 @@ function cholesky_solve_matrix(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n) #
 end
 
 function factorize(
-    data::TriDiagBlockDataNested
+    data::TriDiagBlockData
 )
 
 P = data.P
@@ -424,7 +423,7 @@ end
 
 end
 
-function solve(data::TriDiagBlockDataNested, d, x)
+function solve(data::TriDiagBlockData, d, x)
 
     P = data.P
     n = data.n
