@@ -2,7 +2,7 @@ module TriDiagBlock
 
 using LinearAlgebra
 
-export TriDiagBlockData, initialize, factorize, solve
+export TriDiagBlockData, initialize, factorize!, solve!
 
 mutable struct TriDiagBlockData{ #TODO create initialize function
     T, 
@@ -333,7 +333,7 @@ function cholesky_solve_matrix(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n) #
 
 end
 
-function factorize(
+function factorize!(
     data::TriDiagBlockData
 )
 
@@ -417,13 +417,13 @@ else
 
     data.NextData.A_list = LHS_A_list
     data.NextData.B_list = LHS_B_list
-    factorize(data.NextData)
+    factorize!(data.NextData)
 
 end
 
 end
 
-function solve(data::TriDiagBlockData, d, x)
+function solve!(data::TriDiagBlockData, d, x)
 
     P = data.P
     n = data.n
@@ -468,7 +468,7 @@ function solve(data::TriDiagBlockData, d, x)
         end
     else
         data.next_x .= view(x, data.next_idx)
-        solve(data.NextData, RHS, data.next_x)
+        solve!(data.NextData, RHS, data.next_x)
         view(x, data.next_idx) .= data.next_x
     end
 

@@ -50,11 +50,11 @@ using LinearAlgebra
 
     data = initialize(N, m, n, P, A_list, B_list, 3);
 
-    @time factorize(data);
+    @time factorize!(data);
 
     x = zeros(data.N * n);
 
-    @time solve(data, d, x);
+    @time solve!(data, d, x);
 
     @test norm(x - x_true) ≤ ϵ * norm(d)
     
