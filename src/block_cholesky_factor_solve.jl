@@ -204,7 +204,8 @@ end
 function cholesky_factorize!(A_list, B_list, M_chol_A_list, M_chol_B_list, A, B, N, n)
 
     copyto!(A, view(A_list, 1, :, :))
-    cholesky!(Hermitian(A))
+    # cholesky!(Hermitian(A))
+    potrf!('U', A)
     copyto!(view(M_chol_A_list, 1, :, :), A)
 
     # Iterate over remaining blocks
@@ -221,7 +222,8 @@ function cholesky_factorize!(A_list, B_list, M_chol_A_list, M_chol_B_list, A, B,
         gemm!('T', 'N', -1.0, B, B, 1.0, A)
         
         # Compute Cholesky factor for current block
-        cholesky!(Hermitian(A));
+        # cholesky!(Hermitian(A));
+        potrf!('U', A)
         copyto!(view(M_chol_A_list, i, :, :), A)
 
     end

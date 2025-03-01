@@ -5,7 +5,7 @@ using HSL
 using BlockStructuredSolvers
 
 import Pkg
-include("benchmark_utils.jl")
+include("utils.jl")
 
 using Printf, ProgressBars, Statistics
 

@@ -1,7 +1,7 @@
 module BlockStructuredSolvers
 
 using LinearAlgebra: ldiv!, mul!, cholesky!, UpperTriangular, Hermitian
-using LinearAlgebra.LAPACK: trtrs!
+using LinearAlgebra.LAPACK: trtrs!, potrf!
 using LinearAlgebra.BLAS: gemm!
 
 export initialize, factorize!, solve!
