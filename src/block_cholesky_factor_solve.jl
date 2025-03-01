@@ -1,4 +1,4 @@
-mutable struct BlockStructuredData{ #TODO create initialize function
+mutable struct BlockTriDiagData{ #TODO create initialize function
     T, 
     MR <: AbstractArray{T, 4},
     MT <: AbstractArray{T, 3},
@@ -41,7 +41,7 @@ mutable struct BlockStructuredData{ #TODO create initialize function
     v_n_1::MU
     v_n_2::MU
 
-    NextData::Union{BlockStructuredData, Nothing}
+    NextData::Union{BlockTriDiagData, Nothing}
 
     next_idx::Vector{Int}
     next_x::MU
@@ -92,7 +92,7 @@ function initialize(N, m, n, P, A_list, B_list, level)
 
     next_x = zeros(P*n);
 
-    data = BlockStructuredData(
+    data = BlockTriDiagData(
         N, 
         m, 
         n, 
@@ -172,7 +172,7 @@ function initialize(N, m, n, P, A_list, B_list, level)
 
         next_x = zeros(P*n);
 
-        next_data = BlockStructuredData(
+        next_data = BlockTriDiagData(
             N, 
             m, 
             n, 
@@ -328,7 +328,7 @@ function cholesky_solve_matrix(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n) #
 end
 
 function factorize!(
-    data::BlockStructuredData
+    data::BlockTriDiagData
 )
 
 P = data.P
@@ -417,7 +417,7 @@ end
 
 end
 
-function solve!(data::BlockStructuredData, d, x)
+function solve!(data::BlockTriDiagData, d, x)
 
     P = data.P
     n = data.n

@@ -1,4 +1,4 @@
-mutable struct BlockStructuredData_full_cholesky_factor{ #TODO create initialize function
+mutable struct BlockTriDiagData_full_cholesky_factor{ #TODO create initialize function
     T, 
     MT <: AbstractArray{T, 3},
     MS <: AbstractArray{T, 2},
@@ -34,7 +34,7 @@ mutable struct BlockStructuredData_full_cholesky_factor{ #TODO create initialize
     U_n::UpperTriangular{T, MS}
     U_mn::UpperTriangular{T, MS}
 
-    NextData::Union{BlockStructuredData_full_cholesky_factor, Nothing}
+    NextData::Union{BlockTriDiagData_full_cholesky_factor, Nothing}
 
     next_idx::Vector{Int}
     next_x::MU
@@ -79,7 +79,7 @@ function initialize_full_cholesky_factor(N, m, n, P, A_list, B_list, level)
 
     next_x = zeros(P*n);
 
-    data = BlockStructuredData_full_cholesky_factor(
+    data = BlockTriDiagData_full_cholesky_factor(
         N, 
         m, 
         n, 
@@ -150,7 +150,7 @@ function initialize_full_cholesky_factor(N, m, n, P, A_list, B_list, level)
 
         next_x = zeros(P*n);
 
-        next_data = BlockStructuredData_full_cholesky_factor(
+        next_data = BlockTriDiagData_full_cholesky_factor(
             N, 
             m, 
             n, 
@@ -216,7 +216,7 @@ function cholesky_factorize_full_cholesky_factor(A_list, B_list, M_chol, A, B, U
 
 end
 
-function factorize_full_cholesky_factor!(data::BlockStructuredData_full_cholesky_factor)
+function factorize_full_cholesky_factor!(data::BlockTriDiagData_full_cholesky_factor)
 
 P = data.P
 n = data.n
@@ -299,7 +299,7 @@ end
 end
 
 # function solve(
-#     data::BlockStructuredData_full_cholesky_factor,
+#     data::BlockTriDiagData_full_cholesky_factor,
 #     d,
 #     x
 # )
@@ -385,7 +385,7 @@ end
 
 # end
 
-function solve_full_cholesky_factor!(data::BlockStructuredData_full_cholesky_factor, d, x)
+function solve_full_cholesky_factor!(data::BlockTriDiagData_full_cholesky_factor, d, x)
     P = data.P
     n = data.n
 
