@@ -1,6 +1,6 @@
 module BlockStructuredSolvers
 
-using LinearAlgebra: ldiv!, mul!, cholesky!, UpperTriangular, Hermitian
+using LinearAlgebra: ldiv!, mul!, cholesky!, Hermitian
 using LinearAlgebra.LAPACK: trtrs!
 using LinearAlgebra.BLAS: gemm!
 

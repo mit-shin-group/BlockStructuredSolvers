@@ -67,15 +67,12 @@ function initialize(N, m, n, P, A_list, B_list, level)
 
     M_n_1 = similar(A_list, n, n);
     M_n_2 = similar(A_list, n, n);
-    U_mn = UpperTriangular(zeros(m*n, m*n));
 
     M_2n = similar(A_list, 2*n, 2*n);
     M_n_2n_1 = zeros(n, 2*n);
     M_n_2n_2 = zeros(n, 2*n);
     M_mn_2n_1 = zeros(m*n, 2*n);
     M_mn_2n_2 = zeros(m*n, 2*n);
-
-    U_n = UpperTriangular(zeros(n, n));
 
     v_n_1 = zeros(n);
     v_n_2 = zeros(n);
@@ -145,15 +142,12 @@ function initialize(N, m, n, P, A_list, B_list, level)
 
         M_n_1 = similar(A_list, n, n);
         M_n_2 = similar(A_list, n, n);
-        U_mn = UpperTriangular(zeros(m*n, m*n));
 
         M_2n = similar(A_list, 2*n, 2*n);
         M_n_2n_1 = zeros(n, 2*n);
         M_n_2n_2 = zeros(n, 2*n);
         M_mn_2n_1 = zeros(m*n, 2*n);
         M_mn_2n_2 = zeros(m*n, 2*n);
-
-        U_n = UpperTriangular(zeros(n, n));
 
         v_n_1 = zeros(n);
         v_n_2 = zeros(n);
@@ -211,7 +205,6 @@ function cholesky_factorize!(A_list, B_list, M_chol_A_list, M_chol_B_list, A, B,
 
     copyto!(A, view(A_list, 1, :, :))
     cholesky!(Hermitian(A))
-    # copyto!(U, UpperTriangular(A))
     copyto!(view(M_chol_A_list, 1, :, :), A)
 
     # Iterate over remaining blocks
@@ -225,12 +218,10 @@ function cholesky_factorize!(A_list, B_list, M_chol_A_list, M_chol_B_list, A, B,
         copyto!(A, view(A_list, i, :, :))
 
         # Compute Schur complement
-        # mul!(A, B', B, -1.0, 1.0)
         gemm!('T', 'N', -1.0, B, B, 1.0, A)
         
         # Compute Cholesky factor for current block
         cholesky!(Hermitian(A));
-        # copyto!(U, UpperTriangular(A));
         copyto!(view(M_chol_A_list, i, :, :), A)
 
     end
