@@ -35,8 +35,6 @@ mutable struct BlockTriDiagData{ #TODO create initialize function
     M_n_2n_2::MS
     M_mn_2n_1::MS
     M_mn_2n_2::MS
-    U_n::UpperTriangular{T, MS}
-    U_mn::UpperTriangular{T, MS}
 
     v_n_1::MU
     v_n_2::MU
@@ -115,8 +113,6 @@ function initialize(N, m, n, P, A_list, B_list, level)
         M_n_2n_2,
         M_mn_2n_1,
         M_mn_2n_2,
-        U_n,
-        U_mn,
         v_n_1,
         v_n_2,
         nothing,
@@ -195,8 +191,6 @@ function initialize(N, m, n, P, A_list, B_list, level)
             M_n_2n_2,
             M_mn_2n_1,
             M_mn_2n_2,
-            U_n,
-            U_mn,
             v_n_1,
             v_n_2,
             nothing,
@@ -213,19 +207,19 @@ function initialize(N, m, n, P, A_list, B_list, level)
 end
 
 
-function cholesky_factorize(A_list, B_list, M_chol_A_list, M_chol_B_list, A, B, U, N, n)
+function cholesky_factorize!(A_list, B_list, M_chol_A_list, M_chol_B_list, A, B, N, n)
 
     copyto!(A, view(A_list, 1, :, :))
     cholesky!(Hermitian(A))
-    copyto!(U, UpperTriangular(A))
-    copyto!(view(M_chol_A_list, 1, :, :), U.data)
+    # copyto!(U, UpperTriangular(A))
+    copyto!(view(M_chol_A_list, 1, :, :), A)
 
     # Iterate over remaining blocks
     for i = 2:N
 
         # Solve for L_{i, i-1}
-        copyto!(A, view(B_list, i-1, :, :))
-        ldiv!(B, U', A)
+        copyto!(B, view(B_list, i-1, :, :))
+        trtrs!('U', 'T', 'N', A, B)
         copyto!(view(M_chol_B_list, i-1, :, :), B)
 
         copyto!(A, view(A_list, i, :, :))
@@ -236,14 +230,14 @@ function cholesky_factorize(A_list, B_list, M_chol_A_list, M_chol_B_list, A, B, 
         
         # Compute Cholesky factor for current block
         cholesky!(Hermitian(A));
-        copyto!(U, UpperTriangular(A));
-        copyto!(view(M_chol_A_list, i, :, :), U.data)
+        # copyto!(U, UpperTriangular(A));
+        copyto!(view(M_chol_A_list, i, :, :), A)
 
     end
 
 end
 
-function cholesky_solve(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n)
+function cholesky_solve!(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n)
     A .= view(M_chol_A_list, 1, :, :);
     v .= view(d, 1:n)
 
@@ -285,7 +279,7 @@ function cholesky_solve(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n)
 
 end
 
-function cholesky_solve_matrix(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n) #TODO merge two solves
+function cholesky_solve_matrix!(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n) #TODO merge two solves
     A .= view(M_chol_A_list, 1, :, :);
     v .= view(d, 1:n, :)
 
@@ -354,21 +348,19 @@ M_2n = data.M_2n
 M_mn_2n_1 = data.M_mn_2n_1
 M_mn_2n_2 = data.M_mn_2n_2
 
-U = data.U_n
 u = data.M_n_2n_1
 v = data.M_n_2n_2
 
 @views for i = 1:P-1 #TODO get rid of views
 
     # Compute inverse of block tridiagonal matrices to compute inverse of MA (top left of Schur complement)
-    cholesky_factorize(
+    cholesky_factorize!(
         A_list[I_separator[i]+1:I_separator[i]+m, :, :], 
         B_list[I_separator[i]+1:I_separator[i]+m-1, :, :], 
         MA_chol_A_list[i, :, :, :],
         MA_chol_B_list[i, :, :, :],
         A,
         B,
-        U,
         m, 
         n)
 
@@ -382,7 +374,7 @@ v = data.M_n_2n_2
     # ldiv!(MA_chol', M_mn_2n_2)
     # ldiv!(MA_chol, M_mn_2n_2)
 
-    cholesky_solve_matrix(MA_chol_A_list[i, :, :, :], MA_chol_B_list[i, :, :, :], M_mn_2n_2, A, u, v, m, n)
+    cholesky_solve_matrix!(MA_chol_A_list[i, :, :, :], MA_chol_B_list[i, :, :, :], M_mn_2n_2, A, u, v, m, n)
 
     factor_list[i, :, :] = M_mn_2n_2
 
@@ -405,7 +397,7 @@ if isnothing(data.NextData)
     LHS_chol_A_list = data.LHS_chol_A_list
     LHS_chol_B_list = data.LHS_chol_B_list
 
-    cholesky_factorize(LHS_A_list, LHS_B_list, LHS_chol_A_list, LHS_chol_B_list, A, B, U, P, n)
+    cholesky_factorize!(LHS_A_list, LHS_B_list, LHS_chol_A_list, LHS_chol_B_list, A, B, P, n)
 
 else
 
@@ -430,7 +422,6 @@ function solve!(data::BlockTriDiagData, d, x)
     factor_list = data.factor_list
 
     B = data.M_n_2
-    U = data.U_mn
     M_mn_2n_1 = data.M_mn_2n_1
 
     RHS = data.RHS
@@ -454,7 +445,7 @@ function solve!(data::BlockTriDiagData, d, x)
         LHS_chol_A_list = data.LHS_chol_A_list
         LHS_chol_B_list = data.LHS_chol_B_list
 
-        cholesky_solve(LHS_chol_A_list, LHS_chol_B_list, RHS, B, u, v, P, n)
+        cholesky_solve!(LHS_chol_A_list, LHS_chol_B_list, RHS, B, u, v, P, n)
 
         # Assign RHS to x for separators
         @inbounds for i = 1:P
@@ -478,7 +469,7 @@ function solve!(data::BlockTriDiagData, d, x)
     # Solve for non-separators
     @inbounds for i = 1:P-1
 
-        cholesky_solve(view(MA_chol_A_list, i, :, :, :), view(MA_chol_B_list, i, :, :, :), view(d, I_separator[i]*n+1:I_separator[i+1]*n-n), B, u, v, m, n)
+        cholesky_solve!(view(MA_chol_A_list, i, :, :, :), view(MA_chol_B_list, i, :, :, :), view(d, I_separator[i]*n+1:I_separator[i+1]*n-n), B, u, v, m, n)
         view(x, I_separator[i]*n+1:I_separator[i+1]*n-n) .= view(d, I_separator[i]*n+1:I_separator[i+1]*n-n)
     end
 
