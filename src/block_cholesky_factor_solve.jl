@@ -228,7 +228,7 @@ function cholesky_factorize!(A_list, B_list, M_chol_A_list, M_chol_B_list, A, B,
 
 end
 
-function cholesky_solve!(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n)
+function cholesky_solve!(M_chol_A_list, M_chol_B_list, d::AbstractArray{T, 1}, A, u, v, N, n) where {T}
     A .= view(M_chol_A_list, 1, :, :);
     v .= view(d, 1:n)
 
@@ -270,7 +270,7 @@ function cholesky_solve!(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n)
 
 end
 
-function cholesky_solve_matrix!(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n) #TODO merge two solves
+function cholesky_solve!(M_chol_A_list, M_chol_B_list, d::AbstractArray{T, 2}, A, u, v, N, n) where {T}
     A .= view(M_chol_A_list, 1, :, :);
     v .= view(d, 1:n, :)
 
@@ -365,7 +365,7 @@ v = data.M_n_2n_2
     # ldiv!(MA_chol', M_mn_2n_2)
     # ldiv!(MA_chol, M_mn_2n_2)
 
-    cholesky_solve_matrix!(MA_chol_A_list[i, :, :, :], MA_chol_B_list[i, :, :, :], M_mn_2n_2, A, u, v, m, n)
+    cholesky_solve!(MA_chol_A_list[i, :, :, :], MA_chol_B_list[i, :, :, :], M_mn_2n_2, A, u, v, m, n)
 
     factor_list[i, :, :] = M_mn_2n_2
 
