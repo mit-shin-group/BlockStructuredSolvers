@@ -12,7 +12,7 @@ using Printf, ProgressBars, Statistics
 
 ######
 
-n = 100 # size of each block
+n = 10 # size of each block
 m = 2 # number of blocks between separators
 N = 55 # number of diagonal blocks
 P = Int((N + m) / (m+1)) # number of separators
