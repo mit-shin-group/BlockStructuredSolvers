@@ -1,11 +1,4 @@
-module TriDiagBlockNested
-
-using LinearAlgebra
-using Distributed
-
-export TriDiagBlockDataNested, initialize, factorize, solve
-
-mutable struct TriDiagBlockDataNested{ #TODO create initialize function
+mutable struct BlockStructuredData_full_cholesky_factor{ #TODO create initialize function
     T, 
     MT <: AbstractArray{T, 3},
     MS <: AbstractArray{T, 2},
@@ -41,14 +34,14 @@ mutable struct TriDiagBlockDataNested{ #TODO create initialize function
     U_n::UpperTriangular{T, MS}
     U_mn::UpperTriangular{T, MS}
 
-    NextData::Union{TriDiagBlockDataNested, Nothing}
+    NextData::Union{BlockStructuredData_full_cholesky_factor, Nothing}
 
     next_idx::Vector{Int}
     next_x::MU
 
 end
 
-function initialize(N, m, n, P, A_list, B_list, level)
+function initialize_full_cholesky_factor(N, m, n, P, A_list, B_list, level)
 
     I_separator = 1:(m+1):N
 
@@ -86,7 +79,7 @@ function initialize(N, m, n, P, A_list, B_list, level)
 
     next_x = zeros(P*n);
 
-    data = TriDiagBlockDataNested(
+    data = BlockStructuredData_full_cholesky_factor(
         N, 
         m, 
         n, 
@@ -157,7 +150,7 @@ function initialize(N, m, n, P, A_list, B_list, level)
 
         next_x = zeros(P*n);
 
-        next_data = TriDiagBlockDataNested(
+        next_data = BlockStructuredData_full_cholesky_factor(
             N, 
             m, 
             n, 
@@ -193,7 +186,7 @@ function initialize(N, m, n, P, A_list, B_list, level)
 end
 
 
-function cholesky_factorize(A_list, B_list, M_chol, A, B, U, N, n)
+function cholesky_factorize_full_cholesky_factor(A_list, B_list, M_chol, A, B, U, N, n)
 
     copyto!(A, view(A_list, 1, :, :))
     cholesky!(Hermitian(A))
@@ -212,7 +205,7 @@ function cholesky_factorize(A_list, B_list, M_chol, A, B, U, N, n)
 
         # Compute Schur complement
         # mul!(A, B', B, -1.0, 1.0)
-        BLAS.gemm!('T', 'N', -1.0, B, B, 1.0, A)
+        gemm!('T', 'N', -1.0, B, B, 1.0, A)
         
         # Compute Cholesky factor for current block
         cholesky!(Hermitian(A));
@@ -223,9 +216,7 @@ function cholesky_factorize(A_list, B_list, M_chol, A, B, U, N, n)
 
 end
 
-function factorize(
-    data::TriDiagBlockDataNested
-)
+function factorize_full_cholesky_factor!(data::BlockStructuredData_full_cholesky_factor)
 
 P = data.P
 n = data.n
@@ -255,7 +246,7 @@ U = data.U_n
 @views for i = 1:P-1 #TODO get rid of views
 
     # Compute inverse of block tridiagonal matrices to compute inverse of MA (top left of Schur complement)
-    cholesky_factorize(
+    cholesky_factorize_full_cholesky_factor(
         A_list[I_separator[i]+1:I_separator[i]+m, :, :], 
         B_list[I_separator[i]+1:I_separator[i]+m-1, :, :], 
         MA_chol,
@@ -295,20 +286,20 @@ if isnothing(data.NextData)
 
     LHS_chol = data.LHS_chol
 
-    cholesky_factorize(LHS_A_list, LHS_B_list, LHS_chol, A, B, U, P, n)
+    cholesky_factorize_full_cholesky_factor(LHS_A_list, LHS_B_list, LHS_chol, A, B, U, P, n)
 
 else
 
     data.NextData.A_list = LHS_A_list
     data.NextData.B_list = LHS_B_list
-    factorize(data.NextData)
+    factorize_full_cholesky_factor!(data.NextData)
 
 end
 
 end
 
 # function solve(
-#     data::TriDiagBlockDataNested,
+#     data::BlockStructuredData_full_cholesky_factor,
 #     d,
 #     x
 # )
@@ -372,7 +363,7 @@ end
 # @inbounds for j = 1:P-1 #TODO remove B
 
 #     copyto!(B, view(B_list, I_separator[j], :, :))
-#     BLAS.gemm!('T', 'N', -1.0, B, view(x, I_separator[j]*n-n+1:I_separator[j]*n), 1.0, view(d, I_separator[j]*n+1:I_separator[j]*n+n))
+#     gemm!('T', 'N', -1.0, B, view(x, I_separator[j]*n-n+1:I_separator[j]*n), 1.0, view(d, I_separator[j]*n+1:I_separator[j]*n+n))
 #     # mul!(view(d, I_separator[j]*n+1:I_separator[j]*n+n,), B, view(x, I_separator[j]*n-n+1:I_separator[j]*n), -1.0, 1.0)
 
 #     copyto!(B, view(B_list, I_separator[j+1]-1, :, :))
@@ -394,7 +385,7 @@ end
 
 # end
 
-function solve(data::TriDiagBlockDataNested, d, x)
+function solve_full_cholesky_factor!(data::BlockStructuredData_full_cholesky_factor, d, x)
     P = data.P
     n = data.n
 
@@ -426,8 +417,8 @@ function solve(data::TriDiagBlockDataNested, d, x)
         # ldiv!(LHS_chol', RHS)
         # ldiv!(LHS_chol, RHS)
 
-        LAPACK.trtrs!('U', 'T', 'N', LHS_chol.data, RHS) #TODO replace trtrs! with custome algorithm
-        LAPACK.trtrs!('U', 'N', 'N', LHS_chol.data, RHS)
+        trtrs!('U', 'T', 'N', LHS_chol.data, RHS) #TODO replace trtrs! with custome algorithm
+        trtrs!('U', 'N', 'N', LHS_chol.data, RHS)
 
         # Assign RHS to x for separators
         @inbounds for i = 1:P
@@ -435,14 +426,14 @@ function solve(data::TriDiagBlockDataNested, d, x)
         end
     else
         data.next_x .= view(x, data.next_idx)
-        solve(data.NextData, RHS, data.next_x)
+        solve_full_cholesky_factor!(data.NextData, RHS, data.next_x)
         view(x, data.next_idx) .= data.next_x
     end
 
     # Update d after Schur solve
     @inbounds for j = 1:P-1
         B .= view(B_list, I_separator[j], :, :)
-        BLAS.gemm!('T', 'N', -1.0, B, view(x, I_separator[j]*n-n+1:I_separator[j]*n), 1.0, view(d, I_separator[j]*n+1:I_separator[j]*n+n))
+        gemm!('T', 'N', -1.0, B, view(x, I_separator[j]*n-n+1:I_separator[j]*n), 1.0, view(d, I_separator[j]*n+1:I_separator[j]*n+n))
 
         B .= view(B_list, I_separator[j+1]-1, :, :)
         mul!(view(d, I_separator[j+1]*n-n-n+1:I_separator[j+1]*n-n), B, view(x, I_separator[j+1]*n-n+1:I_separator[j+1]*n), -1.0, 1.0)
@@ -457,7 +448,4 @@ function solve(data::TriDiagBlockDataNested, d, x)
     end
 
     return nothing
-end
-
-
 end
