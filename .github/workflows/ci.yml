@@ -4,11 +4,11 @@ on:
   push:
     branches:
       - main
-      - proper_strucutre
+      - beat_baseline
   pull_request:
     branches:
       - main
-      - proper_strucutre
+      - beat_baseline
 
 jobs:
   test:
