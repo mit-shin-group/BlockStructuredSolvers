@@ -14,9 +14,9 @@ using Printf, ProgressBars, Statistics
 
 n = 10 # size of each block
 m = 2 # number of blocks between separators
-N = 1459 # number of diagonal blocks
+N = 481 # number of diagonal blocks
 P = Int((N + m) / (m+1)) # number of separators
-level = 6; # number of nested level
+level = 1; # number of nested level
 
 function benchmark_factorization_and_solve(N, n, m, P, level, iter)
     # Storage for times
@@ -32,6 +32,32 @@ function benchmark_factorization_and_solve(N, n, m, P, level, iter)
     our_factor_times = Float64[]
     our_solve_times = Float64[]
 
+    # Warmup run to trigger compilation
+    println("Performing warmup runs...")
+    BigMatrix_warmup, d_warmup, x_true_warmup, A_list_warmup, B_list_warmup = generate_tridiagonal_system(N, n)
+    
+    # Warmup MA57
+    BigMatrix_57_warmup = Ma57(BigMatrix_warmup)
+    ma57_factorize!(BigMatrix_57_warmup)
+    ma57_solve(BigMatrix_57_warmup, d_warmup)
+    
+    # Warmup Cholesky
+    BigMatrix_sparse_warmup = SparseMatrixCSC(BigMatrix_warmup)
+    F_warmup = cholesky(BigMatrix_sparse_warmup)
+    F_warmup \ d_warmup
+    
+    # Warmup LDLᵀ
+    LDLT_warmup = ldl(BigMatrix_warmup)
+    LDLT_warmup \ d_warmup
+    
+    # Warmup our solver
+    data_warmup = initialize(N, m, n, P, A_list_warmup, B_list_warmup, level)
+    factorize!(data_warmup)
+    x_warmup = zeros(data_warmup.N * n)
+    solve!(data_warmup, d_warmup, x_warmup)
+    
+    println("Starting actual benchmark...")
+    
     for i = tqdm(1:iter)
         # Generate problem instance
         BigMatrix, d, x_true, A_list, B_list = generate_tridiagonal_system(N, n)
@@ -52,7 +78,7 @@ function benchmark_factorization_and_solve(N, n, m, P, level, iter)
         #################################################
         BigMatrix_sparse = SparseMatrixCSC(BigMatrix)
 
-        chol_factor_time = @elapsed F = cholesky(BigMatrix_sparse) #TODO, pre allocate F
+        chol_factor_time = @elapsed F = cholesky(BigMatrix_sparse)
         chol_solve_time = @elapsed x = F \ d
 
         push!(chol_factor_times, chol_factor_time)
@@ -61,7 +87,7 @@ function benchmark_factorization_and_solve(N, n, m, P, level, iter)
         #################################################
         # **Method 3: LDLᵀ Factorization**
         #################################################
-        ldl_factor_time = @elapsed LDLT = ldl(BigMatrix) # pre allocate LDLT, separate factorize
+        ldl_factor_time = @elapsed LDLT = ldl(BigMatrix)
         ldl_solve_time = @elapsed x = LDLT \ d
 
         push!(ldl_factor_times, ldl_factor_time)
@@ -82,13 +108,21 @@ function benchmark_factorization_and_solve(N, n, m, P, level, iter)
     end
 
     # Compute and print the average times
-    println("Average Factorization and Solve Times over ", iter, " Runs:")
+    println("\nAverage Factorization and Solve Times over ", iter, " Runs:")
     println("---------------------------------------------------")
     @printf("MA57 - Factorize: %.6f ms, Solve: %.6f ms\n", mean(ma57_factor_times) * 1000, mean(ma57_solve_times) * 1000)
     @printf("Cholesky - Factorize: %.6f ms, Solve: %.6f ms\n", mean(chol_factor_times) * 1000, mean(chol_solve_times) * 1000)
     @printf("LDLᵀ - Factorize: %.6f ms, Solve: %.6f ms\n", mean(ldl_factor_times) * 1000, mean(ldl_solve_times) * 1000)
     @printf("Ours - Factorize: %.6f ms, Solve: %.6f ms\n", mean(our_factor_times) * 1000, mean(our_solve_times) * 1000)
+
+    # Also print standard deviations
+    println("\nStandard Deviations:")
+    println("---------------------------------------------------")
+    @printf("MA57 - Factorize: %.6f ms, Solve: %.6f ms\n", std(ma57_factor_times) * 1000, std(ma57_solve_times) * 1000)
+    @printf("Cholesky - Factorize: %.6f ms, Solve: %.6f ms\n", std(chol_factor_times) * 1000, std(chol_solve_times) * 1000)
+    @printf("LDLᵀ - Factorize: %.6f ms, Solve: %.6f ms\n", std(ldl_factor_times) * 1000, std(ldl_solve_times) * 1000)
+    @printf("Ours - Factorize: %.6f ms, Solve: %.6f ms\n", std(our_factor_times) * 1000, std(our_solve_times) * 1000)
 end
 
-
+# Run benchmark with warmup
 benchmark_factorization_and_solve(N, n, m, P, level, 100)
