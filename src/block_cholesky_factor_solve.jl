@@ -356,16 +356,11 @@ v = data.M_n_2n_2
         B,
         m, 
         n)
-
-    # MA_chol_list[i, :, :] .= MA_chol
     
     M_mn_2n_1[1:n, 1:n] .= B_list[I_separator[i], :, :]'
     M_mn_2n_1[m*n-n+1:m*n, n+1:2*n] .= B_list[I_separator[i+1]-1, :, :]
 
     M_mn_2n_2 .= M_mn_2n_1
-
-    # ldiv!(MA_chol', M_mn_2n_2)
-    # ldiv!(MA_chol, M_mn_2n_2)
 
     cholesky_solve!(MA_chol_A_list[i, :, :, :], MA_chol_B_list[i, :, :, :], M_mn_2n_2, A, u, v, m, n)
 
