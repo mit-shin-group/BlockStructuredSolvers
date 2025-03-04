@@ -200,120 +200,6 @@ function initialize(N, m, n, P, A_list, B_list, level)
 
 end
 
-
-function cholesky_factorize!(A_list, B_list, M_chol_A_list, M_chol_B_list, A, B, N, n)
-
-    copyto!(A, view(A_list, 1, :, :))
-    # cholesky!(Hermitian(A))
-    potrf!('U', A)
-    copyto!(view(M_chol_A_list, 1, :, :), A)
-
-    # Iterate over remaining blocks
-    for i = 2:N
-
-        # Solve for L_{i, i-1}
-        copyto!(B, view(B_list, i-1, :, :))
-        trtrs!('U', 'T', 'N', A, B)
-        copyto!(view(M_chol_B_list, i-1, :, :), B)
-
-        copyto!(A, view(A_list, i, :, :))
-
-        # Compute Schur complement
-        gemm!('T', 'N', -1.0, B, B, 1.0, A)
-        
-        # Compute Cholesky factor for current block
-        # cholesky!(Hermitian(A));
-        potrf!('U', A)
-        copyto!(view(M_chol_A_list, i, :, :), A)
-
-    end
-
-end
-
-function cholesky_solve!(M_chol_A_list, M_chol_B_list, d::AbstractArray{T, 1}, A, u, v, N, n) where {T}
-    A .= view(M_chol_A_list, 1, :, :);
-    v .= view(d, 1:n)
-
-    trtrs!('U', 'T', 'N', A, v);
-    view(d, 1:n) .= v;
-
-    for i = 2:N
-
-        A .= view(M_chol_B_list, i-1, :, :);
-
-        u .= v
-        v .= view(d, (i-1)*n+1:i*n)
-
-        gemm!('T', 'N', -1.0, A, u, 1.0, v)
-
-        A .= view(M_chol_A_list, i, :, :);
-        trtrs!('U', 'T', 'N', A, v)
-        view(d, (i-1)*n+1:i*n) .= v
-
-    end
-
-    trtrs!('U', 'N', 'N', A, v);
-    view(d, (N-1)*n+1:N*n) .= v;
-
-    for i = N-1:-1:1
-
-        A .= view(M_chol_B_list, i, :, :);
-
-        u .= v
-        v .= view(d, (i-1)*n+1:i*n)
-
-        gemm!('N', 'N', -1.0, A, u, 1.0, v)
-
-        A .= view(M_chol_A_list, i, :, :);
-        trtrs!('U', 'N', 'N', A, v)
-        view(d, (i-1)*n+1:i*n) .= v
-
-    end
-
-end
-
-function cholesky_solve!(M_chol_A_list, M_chol_B_list, d::AbstractArray{T, 2}, A, u, v, N, n) where {T}
-    A .= view(M_chol_A_list, 1, :, :);
-    v .= view(d, 1:n, :)
-
-    trtrs!('U', 'T', 'N', A, v);
-    view(d, 1:n, :) .= v;
-
-    for i = 2:N
-
-        A .= view(M_chol_B_list, i-1, :, :);
-
-        u .= v
-        v .= view(d, (i-1)*n+1:i*n, :)
-
-        gemm!('T', 'N', -1.0, A, u, 1.0, v)
-
-        A .= view(M_chol_A_list, i, :, :);
-        trtrs!('U', 'T', 'N', A, v)
-        view(d, (i-1)*n+1:i*n, :) .= v
-
-    end
-
-    trtrs!('U', 'N', 'N', A, v);
-    view(d, (N-1)*n+1:N*n, :) .= v;
-
-    for i = N-1:-1:1
-
-        A .= view(M_chol_B_list, i, :, :);
-
-        u .= v
-        v .= view(d, (i-1)*n+1:i*n, :)
-
-        gemm!('N', 'N', -1.0, A, u, 1.0, v)
-
-        A .= view(M_chol_A_list, i, :, :);
-        trtrs!('U', 'N', 'N', A, v)
-        view(d, (i-1)*n+1:i*n, :) .= v
-
-    end
-
-end
-
 function factorize!(
     data::BlockTriDiagData
 )
@@ -344,61 +230,73 @@ M_mn_2n_2 = data.M_mn_2n_2
 u = data.M_n_2n_1
 v = data.M_n_2n_2
 
-@views for i = 1:P-1 #TODO get rid of views
+@inbounds for i = 1:P-1
+    # Cache views for better performance
+    A_block = view(A_list, I_separator[i]+1:I_separator[i]+m, :, :)
+    B_block = view(B_list, I_separator[i]+1:I_separator[i]+m-1, :, :)
+    MA_chol_A = view(MA_chol_A_list, i, :, :, :)
+    MA_chol_B = view(MA_chol_B_list, i, :, :, :)
 
-    # Compute inverse of block tridiagonal matrices to compute inverse of MA (top left of Schur complement)
+    # Compute inverse of block tridiagonal matrices
     cholesky_factorize!(
-        A_list[I_separator[i]+1:I_separator[i]+m, :, :], 
-        B_list[I_separator[i]+1:I_separator[i]+m-1, :, :], 
-        MA_chol_A_list[i, :, :, :],
-        MA_chol_B_list[i, :, :, :],
+        A_block,
+        B_block,
+        MA_chol_A,
+        MA_chol_B,
         A,
         B,
         m, 
         n)
     
-    M_mn_2n_1[1:n, 1:n] .= B_list[I_separator[i], :, :]'
-    M_mn_2n_1[m*n-n+1:m*n, n+1:2*n] .= B_list[I_separator[i+1]-1, :, :]
+    # Cache frequently accessed views
+    B_view1 = view(B_list, I_separator[i], :, :)
+    B_view2 = view(B_list, I_separator[i+1]-1, :, :)
+    
+    @views begin
+        M_mn_2n_1[1:n, 1:n] .= B_view1'
+        M_mn_2n_1[m*n-n+1:m*n, n+1:2*n] .= B_view2
+    end
 
     M_mn_2n_2 .= M_mn_2n_1
 
-    cholesky_solve!(MA_chol_A_list[i, :, :, :], MA_chol_B_list[i, :, :, :], M_mn_2n_2, A, u, v, m, n)
+    cholesky_solve!(MA_chol_A, MA_chol_B, M_mn_2n_2, A, u, v, m, n)
 
     factor_list[i, :, :] = M_mn_2n_2
 
     mul!(M_2n, M_mn_2n_1', M_mn_2n_2)
 
-    LHS_A_list[i, :, :] .-= M_2n[1:n, 1:n]
-    LHS_A_list[i+1, :, :] .-= M_2n[n+1:2*n, n+1:2*n]
-    LHS_B_list[i, :, :] .-= M_2n[1:n, n+1:2*n]
+    # Cache views for LHS updates
+    lhs_a1 = view(LHS_A_list, i, :, :)
+    lhs_a2 = view(LHS_A_list, i+1, :, :)
+    lhs_b = view(LHS_B_list, i, :, :)
+    
+    @views begin
+        lhs_a1 .-= M_2n[1:n, 1:n]
+        lhs_a2 .-= M_2n[n+1:2*n, n+1:2*n]
+        lhs_b .-= M_2n[1:n, n+1:2*n]
+    end
 
-    LHS_A_list[i, :, :] .+= A_list[I_separator[i], :, :]
-
+    lhs_a1 .+= view(A_list, I_separator[i], :, :)
 end
 
 copyto!(A, view(LHS_A_list, P, :, :))
-A .+= view(A_list, I_separator[P], :, :) #TODO how to get rid of .+=
+A .+= view(A_list, I_separator[P], :, :)
 copyto!(view(LHS_A_list, P, :, :), A)
 
 if isnothing(data.NextData)
-
     LHS_chol_A_list = data.LHS_chol_A_list
     LHS_chol_B_list = data.LHS_chol_B_list
 
     cholesky_factorize!(LHS_A_list, LHS_B_list, LHS_chol_A_list, LHS_chol_B_list, A, B, P, n)
-
 else
-
     data.NextData.A_list = LHS_A_list
     data.NextData.B_list = LHS_B_list
     factorize!(data.NextData)
-
 end
 
 end
 
 function solve!(data::BlockTriDiagData, d, x)
-
     P = data.P
     n = data.n
     m = data.m
@@ -417,27 +315,29 @@ function solve!(data::BlockTriDiagData, d, x)
     v = data.v_n_2
 
     # Assign RHS from d
-    @inbounds for j = 1:P
-        view(RHS, (j-1)*n+1:j*n) .= view(d, I_separator[j]*n-n+1:I_separator[j]*n)
+    @inbounds @simd for j = 1:P
+        copyto!(view(RHS, (j-1)*n+1:j*n), view(d, I_separator[j]*n-n+1:I_separator[j]*n))
     end
 
     # Compute RHS from Schur complement
     @inbounds for i = 1:P-1
         M_mn_2n_1 .= view(factor_list, i, :, :)
-        mul!(view(RHS, (i-1)*n+1:(i+1)*n), M_mn_2n_1', view(d, I_separator[i]*n+1:I_separator[i+1]*n-n), -1.0, 1.0)
+        # Cache views to avoid repeated view creation
+        rhs_view = view(RHS, (i-1)*n+1:(i+1)*n)
+        d_view = view(d, I_separator[i]*n+1:I_separator[i+1]*n-n)
+        mul!(rhs_view, M_mn_2n_1', d_view, -1.0, 1.0)
     end
 
     # Solve system
     if isnothing(data.NextData)
-
         LHS_chol_A_list = data.LHS_chol_A_list
         LHS_chol_B_list = data.LHS_chol_B_list
 
         cholesky_solve!(LHS_chol_A_list, LHS_chol_B_list, RHS, B, u, v, P, n)
 
         # Assign RHS to x for separators
-        @inbounds for i = 1:P
-            view(x, I_separator[i]*n-n+1:I_separator[i]*n) .= view(RHS, (i-1)*n+1:i*n)
+        @inbounds @simd for i = 1:P
+            copyto!(view(x, I_separator[i]*n-n+1:I_separator[i]*n), view(RHS, (i-1)*n+1:i*n))
         end
     else
         data.next_x .= view(x, data.next_idx)
@@ -447,18 +347,23 @@ function solve!(data::BlockTriDiagData, d, x)
 
     # Update d after Schur solve
     @inbounds for j = 1:P-1
+        # Cache views and matrices
         B .= view(B_list, I_separator[j], :, :)
-        gemm!('T', 'N', -1.0, B, view(x, I_separator[j]*n-n+1:I_separator[j]*n), 1.0, view(d, I_separator[j]*n+1:I_separator[j]*n+n))
+        x_view = view(x, I_separator[j]*n-n+1:I_separator[j]*n)
+        d_view = view(d, I_separator[j]*n+1:I_separator[j]*n+n)
+        gemm!('T', 'N', -1.0, B, x_view, 1.0, d_view)
 
         B .= view(B_list, I_separator[j+1]-1, :, :)
-        mul!(view(d, I_separator[j+1]*n-n-n+1:I_separator[j+1]*n-n), B, view(x, I_separator[j+1]*n-n+1:I_separator[j+1]*n), -1.0, 1.0)
+        x_view = view(x, I_separator[j+1]*n-n+1:I_separator[j+1]*n)
+        d_view = view(d, I_separator[j+1]*n-n-n+1:I_separator[j+1]*n-n)
+        mul!(d_view, B, x_view, -1.0, 1.0)
     end
 
     # Solve for non-separators
     @inbounds for i = 1:P-1
-
-        cholesky_solve!(view(MA_chol_A_list, i, :, :, :), view(MA_chol_B_list, i, :, :, :), view(d, I_separator[i]*n+1:I_separator[i+1]*n-n), B, u, v, m, n)
-        view(x, I_separator[i]*n+1:I_separator[i+1]*n-n) .= view(d, I_separator[i]*n+1:I_separator[i+1]*n-n)
+        d_view = view(d, I_separator[i]*n+1:I_separator[i+1]*n-n)
+        cholesky_solve!(view(MA_chol_A_list, i, :, :, :), view(MA_chol_B_list, i, :, :, :), d_view, B, u, v, m, n)
+        copyto!(view(x, I_separator[i]*n+1:I_separator[i+1]*n-n), d_view)
     end
 
     return nothing
