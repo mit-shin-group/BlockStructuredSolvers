@@ -2,8 +2,18 @@
 
     n = 100 # size of each block
     m = 2 # number of blocks between separators
-    N = 55 # number of diagonal blocks
-    P = Int((N + m) / (m+1))
+    P = 3 # number of separators
+    P_start = P
+    level = 3
+    N = P * (m + 1) - m;
+
+    for i = 2:level
+
+        P = N;
+        N = P * (m + 1) - m;
+
+    end
+        
 
     #######################################
     A_list = zeros(N, n, n);
@@ -44,7 +54,7 @@
 
     ϵ = sqrt(eps(eltype(A_list)));
 
-    data = initialize(N, m, n, P, A_list, B_list, 3);
+    data = initialize(P_start * (m + 1) - m, m, n, P_start, A_list, B_list, level);
 
     @time factorize!(data);
 

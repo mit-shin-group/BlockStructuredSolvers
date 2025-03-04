@@ -1,4 +1,4 @@
-mutable struct BlockTriDiagData{ #TODO create initialize function
+struct BlockTriDiagData{ #TODO create initialize function
     T, 
     MR <: AbstractArray{T, 4},
     MT <: AbstractArray{T, 3},
@@ -46,84 +46,11 @@ mutable struct BlockTriDiagData{ #TODO create initialize function
 
 end
 
-function initialize(N, m, n, P, A_list, B_list, level)
+function initialize(N, m, n, P, A_list_final, B_list_final, level)
 
-    I_separator = 1:(m+1):N
+    data = nothing;
 
-    LHS_A_list = zeros(P, n, n);
-    LHS_B_list = zeros(P-1, n, n);
-
-    MA_list = zeros(P-1, m*n, m*n);
-
-    RHS = zeros(P * n);
-
-    MA_chol_A_list = zeros(P-1, m, n, n);
-    MA_chol_B_list = zeros(P-1, m-1, n, n);
-
-    LHS_chol_A_list = zeros(P, n, n);
-    LHS_chol_B_list = zeros(P-1, n, n);
-
-    factor_list = zeros(P-1, m*n, 2*n);
-
-    M_n_1 = similar(A_list, n, n);
-    M_n_2 = similar(A_list, n, n);
-
-    M_2n = similar(A_list, 2*n, 2*n);
-    M_n_2n_1 = zeros(n, 2*n);
-    M_n_2n_2 = zeros(n, 2*n);
-    M_mn_2n_1 = zeros(m*n, 2*n);
-    M_mn_2n_2 = zeros(m*n, 2*n);
-
-    v_n_1 = zeros(n);
-    v_n_2 = zeros(n);
-
-    next_idx = Int[]
-
-    for j = I_separator
-
-        append!(next_idx, (j-1)*n+1:j*n)
-        
-    end
-
-    next_x = zeros(P*n);
-
-    data = BlockTriDiagData(
-        N, 
-        m, 
-        n, 
-        P, 
-        I_separator, 
-        A_list, 
-        B_list,
-        LHS_A_list,
-        LHS_B_list,
-        factor_list,
-        RHS,
-        MA_chol_A_list,
-        MA_chol_B_list,
-        LHS_chol_A_list,
-        LHS_chol_B_list,
-        M_n_1,
-        M_n_2,
-        M_2n,
-        M_n_2n_1,
-        M_n_2n_2,
-        M_mn_2n_1,
-        M_mn_2n_2,
-        v_n_1,
-        v_n_2,
-        nothing,
-        next_idx,
-        next_x
-    );
-
-    prev_data = data;
-
-    for i = 2:level
-
-        N = P;
-        m = 2;
-        P = Int((N + m) / (m+1));
+    for i = 1:level
 
         I_separator = 1:(m+1):N
 
@@ -140,10 +67,10 @@ function initialize(N, m, n, P, A_list, B_list, level)
 
         factor_list = zeros(P-1, m*n, 2*n);
 
-        M_n_1 = similar(A_list, n, n);
-        M_n_2 = similar(A_list, n, n);
+        M_n_1 = zeros(n, n);
+        M_n_2 = zeros(n, n);
 
-        M_2n = similar(A_list, 2*n, 2*n);
+        M_2n = zeros(2*n, 2*n);
         M_n_2n_1 = zeros(n, 2*n);
         M_n_2n_2 = zeros(n, 2*n);
         M_mn_2n_1 = zeros(m*n, 2*n);
@@ -162,7 +89,15 @@ function initialize(N, m, n, P, A_list, B_list, level)
 
         next_x = zeros(P*n);
 
-        next_data = BlockTriDiagData(
+        if i == level
+            A_list = A_list_final
+            B_list = B_list_final
+        else
+            A_list = zeros(N, n, n);
+            B_list = zeros(N-1, n, n);
+        end
+
+        data = BlockTriDiagData(
             N, 
             m, 
             n, 
@@ -187,13 +122,14 @@ function initialize(N, m, n, P, A_list, B_list, level)
             M_mn_2n_2,
             v_n_1,
             v_n_2,
-            nothing,
+            data,
             next_idx,
             next_x,
             );
 
-        prev_data.NextData = next_data;
-        prev_data = next_data;
+        P = N;
+        N = P * (m + 1) - m;
+
     end
 
     return data
@@ -289,8 +225,8 @@ if isnothing(data.NextData)
 
     cholesky_factorize!(LHS_A_list, LHS_B_list, LHS_chol_A_list, LHS_chol_B_list, A, B, P, n)
 else
-    data.NextData.A_list = LHS_A_list
-    data.NextData.B_list = LHS_B_list
+    data.NextData.A_list .= LHS_A_list
+    data.NextData.B_list .= LHS_B_list
     factorize!(data.NextData)
 end
 
