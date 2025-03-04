@@ -14,11 +14,20 @@ using Printf, ProgressBars, Statistics
 
 n = 10 # size of each block
 m = 2 # number of blocks between separators
-N = 481 # number of diagonal blocks
-P = Int((N + m) / (m+1)) # number of separators
-level = 1; # number of nested level
+P_last = 3 # number of separators
+level = 3; # number of nested level
+N_last = P_last * (m + 1) - m; # number of diagonal blocks
 
-function benchmark_factorization_and_solve(N, n, m, P, level, iter)
+function benchmark_factorization_and_solve(N_last, n, m, P_last, level, iter)
+
+    N = N_last;
+    P = P_last;
+
+    for i = 2:level
+        P = N;
+        N = P * (m + 1) - m;
+    end
+
     # Storage for times
     ma57_factor_times = Float64[]
     ma57_solve_times = Float64[]
@@ -57,7 +66,7 @@ function benchmark_factorization_and_solve(N, n, m, P, level, iter)
     LDLT_warmup \ d_warmup
     
     # Warmup our solvers
-    data_warmup = initialize(N, m, n, P, A_list_warmup, B_list_warmup, level)
+    data_warmup = initialize(N_last, m, n, P_last, A_list_warmup, B_list_warmup, level)
     factorize!(data_warmup)
     x_warmup = zeros(data_warmup.N * n)
     solve!(data_warmup, d_warmup, x_warmup)
@@ -112,7 +121,7 @@ function benchmark_factorization_and_solve(N, n, m, P, level, iter)
         #################################################
         # **Method 4: Our Solver**
         #################################################
-        data = initialize(N, m, n, P, A_list, B_list, level)
+        data = initialize(N_last, m, n, P_last, A_list, B_list, level)
 
         our_factor_time = @elapsed factorize!(data)
 
@@ -170,4 +179,4 @@ function benchmark_factorization_and_solve(N, n, m, P, level, iter)
 end
 
 # Run benchmark with warmup
-benchmark_factorization_and_solve(N, n, m, P, level, 100)
+benchmark_factorization_and_solve(N_last, n, m, P_last, level, 100)
