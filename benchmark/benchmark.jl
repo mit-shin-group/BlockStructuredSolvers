@@ -32,6 +32,12 @@ function benchmark_factorization_and_solve(N, n, m, P, level, iter)
     our_factor_times = Float64[]
     our_solve_times = Float64[]
 
+    our_factor_times_2 = Float64[]
+    our_solve_times_2 = Float64[]
+
+    our_factor_times_3 = Float64[]
+    our_solve_times_3 = Float64[]
+
     # Warmup run to trigger compilation
     println("Performing warmup runs...")
     BigMatrix_warmup, d_warmup, x_true_warmup, A_list_warmup, B_list_warmup = generate_tridiagonal_system(N, n)
@@ -50,11 +56,21 @@ function benchmark_factorization_and_solve(N, n, m, P, level, iter)
     LDLT_warmup = ldl(BigMatrix_warmup)
     LDLT_warmup \ d_warmup
     
-    # Warmup our solver
+    # Warmup our solvers
     data_warmup = initialize(N, m, n, P, A_list_warmup, B_list_warmup, level)
     factorize!(data_warmup)
     x_warmup = zeros(data_warmup.N * n)
     solve!(data_warmup, d_warmup, x_warmup)
+    
+    data_warmup_2 = initialize_full_cholesky_factor(N, m, n, P, A_list_warmup, B_list_warmup, level)
+    factorize_full_cholesky_factor!(data_warmup_2)
+    x_warmup_2 = zeros(data_warmup_2.N * n)
+    solve_full_cholesky_factor!(data_warmup_2, d_warmup, x_warmup_2)
+
+    data_warmup_3 = initialize_sequential_cholesky_factor(N, n, A_list_warmup, B_list_warmup)
+    factorize_sequential_cholesky_factor!(data_warmup_3)
+    x_warmup_3 = zeros(data_warmup_3.N * n)
+    solve_sequential_cholesky_factor!(data_warmup_3, d_warmup, x_warmup_3)
     
     println("Starting actual benchmark...")
     
@@ -105,6 +121,32 @@ function benchmark_factorization_and_solve(N, n, m, P, level, iter)
 
         push!(our_factor_times, our_factor_time)
         push!(our_solve_times, our_solve_time)
+
+        #################################################
+        # **Method 5: Our Solver (Full Cholesky)**
+        #################################################
+        data2 = initialize_full_cholesky_factor(N, m, n, P, A_list, B_list, level)
+
+        our_factor_time_2 = @elapsed factorize_full_cholesky_factor!(data2)
+
+        x2 = zeros(data2.N * n)
+        our_solve_time_2 = @elapsed solve_full_cholesky_factor!(data2, d, x2)
+
+        push!(our_factor_times_2, our_factor_time_2)
+        push!(our_solve_times_2, our_solve_time_2)
+
+        #################################################
+        # **Method 6: Sequential Cholesky Factor**
+        #################################################
+        data3 = initialize_sequential_cholesky_factor(N, n, A_list, B_list)
+
+        our_factor_time_3 = @elapsed factorize_sequential_cholesky_factor!(data3)
+
+        x3 = zeros(data3.N * n)
+        our_solve_time_3 = @elapsed solve_sequential_cholesky_factor!(data3, d, x3)
+
+        push!(our_factor_times_3, our_factor_time_3)
+        push!(our_solve_times_3, our_solve_time_3)
     end
 
     # Compute and print the average times
@@ -114,7 +156,8 @@ function benchmark_factorization_and_solve(N, n, m, P, level, iter)
     @printf("Cholesky - Factorize: %.6f ms, Solve: %.6f ms\n", mean(chol_factor_times) * 1000, mean(chol_solve_times) * 1000)
     @printf("LDLᵀ - Factorize: %.6f ms, Solve: %.6f ms\n", mean(ldl_factor_times) * 1000, mean(ldl_solve_times) * 1000)
     @printf("Ours - Factorize: %.6f ms, Solve: %.6f ms\n", mean(our_factor_times) * 1000, mean(our_solve_times) * 1000)
-
+    @printf("Ours (Full) - Factorize: %.6f ms, Solve: %.6f ms\n", mean(our_factor_times_2) * 1000, mean(our_solve_times_2) * 1000)
+    @printf("Ours (Sequential) - Factorize: %.6f ms, Solve: %.6f ms\n", mean(our_factor_times_3) * 1000, mean(our_solve_times_3) * 1000)
     # Also print standard deviations
     println("\nStandard Deviations:")
     println("---------------------------------------------------")
@@ -122,6 +165,8 @@ function benchmark_factorization_and_solve(N, n, m, P, level, iter)
     @printf("Cholesky - Factorize: %.6f ms, Solve: %.6f ms\n", std(chol_factor_times) * 1000, std(chol_solve_times) * 1000)
     @printf("LDLᵀ - Factorize: %.6f ms, Solve: %.6f ms\n", std(ldl_factor_times) * 1000, std(ldl_solve_times) * 1000)
     @printf("Ours - Factorize: %.6f ms, Solve: %.6f ms\n", std(our_factor_times) * 1000, std(our_solve_times) * 1000)
+    @printf("Ours (Full) - Factorize: %.6f ms, Solve: %.6f ms\n", std(our_factor_times_2) * 1000, std(our_solve_times_2) * 1000)
+    @printf("Ours (Sequential) - Factorize: %.6f ms, Solve: %.6f ms\n", std(our_factor_times_3) * 1000, std(our_solve_times_3) * 1000)
 end
 
 # Run benchmark with warmup
