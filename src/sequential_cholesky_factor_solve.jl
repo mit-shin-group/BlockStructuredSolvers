@@ -1,4 +1,4 @@
-mutable struct BlockTriDiagData_sequential_cholesky_factor{ #TODO create initialize function
+struct BlockTriDiagData_sequential_cholesky_factor{ #TODO create initialize function
     T, 
     MT <: AbstractArray{T, 3},
     MS <: AbstractArray{T, 2},
