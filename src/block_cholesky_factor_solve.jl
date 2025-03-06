@@ -1,4 +1,4 @@
-struct BlockTriDiagData{ #TODO create initialize function
+struct BlockTriDiagData{
     T, 
     MR <: AbstractArray{T, 4},
     MT <: AbstractArray{T, 3},
