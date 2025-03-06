@@ -1,9 +1,6 @@
-struct BlockTriDiagData_sequential_cholesky_factor{ #TODO create initialize function
+struct BlockTriDiagData_sequential_cholesky_factor{
     T, 
-    MT <: AbstractArray{T, 3},
-    MS <: AbstractArray{T, 2},
-    MU <: AbstractArray{T, 1}
-    }
+    MT <: AbstractArray{T, 3}}
 
     N::Int
     n::Int
@@ -11,39 +8,15 @@ struct BlockTriDiagData_sequential_cholesky_factor{ #TODO create initialize func
     A_list::MT
     B_list::MT
 
-    M_chol_A_list::MT
-    M_chol_B_list::MT
-
-    M_n_1::MS
-    M_n_2::MS
-
-    v_n_1::MU
-    v_n_2::MU
-
 end
 
 function initialize_sequential_cholesky_factor(N, n, A_list, B_list)
-
-    M_chol_A_list = zeros(N, n, n);
-    M_chol_B_list = zeros(N-1, n, n);
-
-    v_n_1 = zeros(n);
-    v_n_2 = zeros(n);
-
-    M_n_1 = zeros(n, n);
-    M_n_2 = zeros(n, n);
 
     data = BlockTriDiagData_sequential_cholesky_factor(
         N,
         n,
         A_list,
-        B_list,
-        M_chol_A_list,
-        M_chol_B_list,
-        M_n_1,
-        M_n_2,
-        v_n_1,
-        v_n_2
+        B_list
     )
 
     return data
@@ -51,114 +24,61 @@ function initialize_sequential_cholesky_factor(N, n, A_list, B_list)
 end
 
 
-function cholesky_factorize!(A_list, B_list, M_chol_A_list, M_chol_B_list, A, B, N, n)
+function cholesky_factorize!(A_list, B_list, N)
 
-    copyto!(A, view(A_list, 1, :, :))
-    # cholesky!(Hermitian(A))
-    potrf!('U', A)
-    copyto!(view(M_chol_A_list, 1, :, :), A)
+    potrf!('U', view(A_list, :, :, 1))
 
-    # Iterate over remaining blocks
     for i = 2:N
 
-        # Solve for L_{i, i-1}
-        copyto!(B, view(B_list, i-1, :, :))
-        trtrs!('U', 'T', 'N', A, B)
-        copyto!(view(M_chol_B_list, i-1, :, :), B)
-
-        copyto!(A, view(A_list, i, :, :))
-
-        # Compute Schur complement
-        gemm!('T', 'N', -1.0, B, B, 1.0, A)
-        
-        # Compute Cholesky factor for current block
-        # cholesky!(Hermitian(A));
-        potrf!('U', A)
-        copyto!(view(M_chol_A_list, i, :, :), A)
+        trsm!('L', 'U', 'T', 'N', 1.0, view(A_list, :, :, i-1), view(B_list, :, :, i-1))
+        gemm!('T', 'N', -1.0, view(B_list, :, :, i-1), view(B_list, :, :, i-1), 1.0, view(A_list, :, :, i))
+        potrf!('U', view(A_list, :, :, i))
 
     end
 
 end
 
-function cholesky_solve!(M_chol_A_list, M_chol_B_list, d::AbstractArray{T, 1}, A, u, v, N, n) where {T}
-    A .= view(M_chol_A_list, 1, :, :);
-    v .= view(d, 1:n)
+function cholesky_solve!(M_chol_A_list, M_chol_B_list, d::M, N, n) where {T, M<:AbstractArray{T, 1}}
 
-    trtrs!('U', 'T', 'N', A, v);
-    view(d, 1:n) .= v;
+    trsv!('U', 'T', 'N', view(M_chol_A_list, :, :, 1), view(d, 1:n));
 
-    for i = 2:N
+    for i = 2:N #TODO pprof.jl
 
-        A .= view(M_chol_B_list, i-1, :, :);
+        gemv!('T', -1.0, view(M_chol_B_list, :, :, i-1), view(d, (i-2)*n+1:(i-1)*n), 1.0, view(d, (i-1)*n+1:i*n))
 
-        u .= v
-        v .= view(d, (i-1)*n+1:i*n)
-
-        gemm!('T', 'N', -1.0, A, u, 1.0, v)
-
-        A .= view(M_chol_A_list, i, :, :);
-        trtrs!('U', 'T', 'N', A, v)
-        view(d, (i-1)*n+1:i*n) .= v
+        trsv!('U', 'T', 'N',  view(M_chol_A_list, :, :, i), view(d, (i-1)*n+1:i*n))
 
     end
 
-    trtrs!('U', 'N', 'N', A, v);
-    view(d, (N-1)*n+1:N*n) .= v;
+    trsv!('U', 'N', 'N', view(M_chol_A_list, :, :, N), view(d, (N-1)*n+1:N*n));
 
     for i = N-1:-1:1
 
-        A .= view(M_chol_B_list, i, :, :);
+        gemv!('N', -1.0, view(M_chol_B_list, :, :, i), view(d, i*n+1:(i+1)*n), 1.0, view(d, (i-1)*n+1:i*n))
 
-        u .= v
-        v .= view(d, (i-1)*n+1:i*n)
-
-        gemm!('N', 'N', -1.0, A, u, 1.0, v)
-
-        A .= view(M_chol_A_list, i, :, :);
-        trtrs!('U', 'N', 'N', A, v)
-        view(d, (i-1)*n+1:i*n) .= v
+        trsv!('U', 'N', 'N', view(M_chol_A_list, :, :, i), view(d, (i-1)*n+1:i*n))
 
     end
 
 end
 
-function cholesky_solve!(M_chol_A_list, M_chol_B_list, d::AbstractArray{T, 2}, A, u, v, N, n) where {T}
-    A .= view(M_chol_A_list, 1, :, :);
-    v .= view(d, 1:n, :)
+function cholesky_solve!(M_chol_A_list, M_chol_B_list, d::M, N, n) where {T, M<:AbstractArray{T, 2}}
 
-    trtrs!('U', 'T', 'N', A, v);
-    view(d, 1:n, :) .= v;
+    trsm!('L', 'U', 'T', 'N', 1.0, view(M_chol_A_list, :, :, 1), view(d, 1:n, :));
 
     for i = 2:N
 
-        A .= view(M_chol_B_list, i-1, :, :);
-
-        u .= v
-        v .= view(d, (i-1)*n+1:i*n, :)
-
-        gemm!('T', 'N', -1.0, A, u, 1.0, v)
-
-        A .= view(M_chol_A_list, i, :, :);
-        trtrs!('U', 'T', 'N', A, v)
-        view(d, (i-1)*n+1:i*n, :) .= v
+        gemm!('T', 'N', -1.0, view(M_chol_B_list, :, :, i-1), view(d, (i-2)*n+1:(i-1)*n, :), 1.0, view(d, (i-1)*n+1:i*n, :))
+        trsm!('L', 'U', 'T', 'N', 1.0, view(M_chol_A_list, :, :, i), view(d, (i-1)*n+1:i*n, :))
 
     end
 
-    trtrs!('U', 'N', 'N', A, v);
-    view(d, (N-1)*n+1:N*n, :) .= v;
+    trsm!('L', 'U', 'N', 'N', 1.0, view(M_chol_A_list, :, :, N), view(d, (N-1)*n+1:N*n, :));
 
     for i = N-1:-1:1
 
-        A .= view(M_chol_B_list, i, :, :);
-
-        u .= v
-        v .= view(d, (i-1)*n+1:i*n, :)
-
-        gemm!('N', 'N', -1.0, A, u, 1.0, v)
-
-        A .= view(M_chol_A_list, i, :, :);
-        trtrs!('U', 'N', 'N', A, v)
-        view(d, (i-1)*n+1:i*n, :) .= v
+        gemm!('N', 'N', -1.0, view(M_chol_B_list, :, :, i), view(d, i*n+1:(i+1)*n, :), 1.0, view(d, (i-1)*n+1:i*n, :))
+        trsm!('L', 'U', 'N', 'N', 1.0, view(M_chol_A_list, :, :, i), view(d, (i-1)*n+1:i*n, :))
 
     end
 
@@ -169,18 +89,11 @@ function factorize_sequential_cholesky_factor!(
 )
 
 N = data.N
-n = data.n
 
 A_list = data.A_list
 B_list = data.B_list
 
-M_chol_A_list = data.M_chol_A_list
-M_chol_B_list = data.M_chol_B_list
-
-A = data.M_n_1
-B = data.M_n_2
-
-cholesky_factorize!(A_list, B_list, M_chol_A_list, M_chol_B_list, A, B, N, n)
+cholesky_factorize!(A_list, B_list, N)
 
 end
 
@@ -188,16 +101,10 @@ function solve_sequential_cholesky_factor!(data::BlockTriDiagData_sequential_cho
 
     N = data.N
     n = data.n
+    A_list = data.A_list
+    B_list = data.B_list
 
-    M_chol_A_list = data.M_chol_A_list
-    M_chol_B_list = data.M_chol_B_list
-
-    A = data.M_n_1
-
-    u = data.v_n_1
-    v = data.v_n_2
-
-    cholesky_solve!(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n)
+    cholesky_solve!(A_list, B_list, d, N, n)
 
     x .= d
 

@@ -7,27 +7,27 @@
         println("Run $run/3")
         
         #######################################
-        A_list = zeros(N, n, n);
+        A_list = zeros(n, n, N);
         for i = 1:N
             temp = randn(Float64, n, n)
-            A_list[i, :, :] = temp * temp' + n * I
+            A_list[:, :, i] = temp * temp' + n * I
         end
 
-        B_list = zeros(N-1, n, n);
+        B_list = zeros(n, n, N-1);
         for i = 1:N-1
             temp = randn(Float64, n, n)
-            B_list[i, :, :] = temp
+            B_list[:, :, i] = temp
         end
 
         x_true = rand(N, n);
         d_list = zeros(N, n);
-        d_list[1, :] = A_list[1, :, :] * x_true[1, :] + B_list[1, :, :] * x_true[2, :];
+        d_list[1, :] = A_list[:, :, 1] * x_true[1, :] + B_list[:, :, 1] * x_true[2, :];
 
         @views for i = 2:N-1
-            d_list[i, :] = B_list[i-1, :, :]' * x_true[i-1, :] + A_list[i, :, :] * x_true[i, :] + B_list[i, :, :] * x_true[i+1, :];
+            d_list[i, :] = B_list[:, :, i-1]' * x_true[i-1, :] + A_list[:, :, i] * x_true[i, :] + B_list[:, :, i] * x_true[i+1, :];
         end
 
-        d_list[N, :] = B_list[N-1, :, :]' * x_true[N-1, :] + A_list[N, :, :] * x_true[N, :];
+        d_list[N, :] = B_list[:, :, N-1]' * x_true[N-1, :] + A_list[:, :, N] * x_true[N, :];
 
         d = zeros(N * n);
 

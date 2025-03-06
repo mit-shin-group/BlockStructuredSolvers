@@ -1,8 +1,8 @@
 name = "BlockStructuredSolvers"
 uuid = "e294871a-52ed-424c-aac5-512b15cb83b5"
+license = "MIT"
 authors = ["David Jin <jindavid@mit.edu>", "Sungho Shin <sushin@mit.edu>"]
 version = "0.1.0"
-license = "MIT"
 
 [deps]
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
