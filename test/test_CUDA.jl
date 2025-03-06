@@ -63,6 +63,6 @@
         println("  Solve:")
         @time solve_CUDA!(data, d, x)
 
-        @test CUDA.norm(x - x_true) ≤ ϵ * CUDA.norm(d)
+        @test norm(x - x_true) ≤ ϵ * norm(d)
     end
 end
