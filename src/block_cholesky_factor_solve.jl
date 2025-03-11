@@ -171,7 +171,7 @@ M_mn_2n_2 = data.M_mn_2n_2
 
     factor_list[:, :, i] = M_mn_2n_2
 
-    gemm!('T', 'N', 1.0, M_mn_2n_1, M_mn_2n_2, 0.0, M_2n)
+    mygemm!('T', 'N', 1.0, M_mn_2n_1, M_mn_2n_2, 0.0, M_2n)
 
     # Cache views for LHS updates
     lhs_a1 = view(LHS_A_list, :, :, i)
@@ -226,7 +226,7 @@ function solve!(data::BlockTriDiagData, d, x)
 
     # Compute RHS from Schur complement
     @inbounds for i = 1:P-1
-        gemv!('T', -1.0, view(factor_list, :, :, i), view(d, I_separator[i]*n+1:I_separator[i+1]*n-n), 1.0, view(RHS, (i-1)*n+1:(i+1)*n))
+        mygemv!('T', -1.0, view(factor_list, :, :, i), view(d, I_separator[i]*n+1:I_separator[i+1]*n-n), 1.0, view(RHS, (i-1)*n+1:(i+1)*n))
     end
 
     # Solve system
@@ -249,9 +249,9 @@ function solve!(data::BlockTriDiagData, d, x)
     # Update d after Schur solve
     @inbounds for j = 1:P-1
         # Cache views and matrices
-        gemv!('T', -1.0, view(B_list, :, :, I_separator[j]), view(x, I_separator[j]*n-n+1:I_separator[j]*n), 1.0, view(d, I_separator[j]*n+1:I_separator[j]*n+n))
+        mygemv!('T', -1.0, view(B_list, :, :, I_separator[j]), view(x, I_separator[j]*n-n+1:I_separator[j]*n), 1.0, view(d, I_separator[j]*n+1:I_separator[j]*n+n))
 
-        gemv!('N', -1.0, view(B_list, :, :, I_separator[j+1]-1), view(x, I_separator[j+1]*n-n+1:I_separator[j+1]*n), 1.0, view(d, I_separator[j+1]*n-n-n+1:I_separator[j+1]*n-n))
+        mygemv!('N', -1.0, view(B_list, :, :, I_separator[j+1]-1), view(x, I_separator[j+1]*n-n+1:I_separator[j+1]*n), 1.0, view(d, I_separator[j+1]*n-n-n+1:I_separator[j+1]*n-n))
     end
 
     # Solve for non-separators

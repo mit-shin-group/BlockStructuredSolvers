@@ -117,66 +117,6 @@ function initialize_CUDA(N, m, n, P, A_list_final, B_list_final, level)
 
 end
 
-function cholesky_factorize!(A_list::M, B_list::M, N) where {T, M<:CuArray{T, 3}}
-
-    CUSOLVER.potrf!('U', view(A_list, :, :, 1))
-
-    for i = 2:N
-
-        CUBLAS.trsm!('L', 'U', 'T', 'N', 1.0, view(A_list, :, :, i-1), view(B_list, :, :, i-1))
-        CUBLAS.gemm!('T', 'N', -1.0, view(B_list, :, :, i-1), view(B_list, :, :, i-1), 1.0, view(A_list, :, :, i))
-        CUSOLVER.potrf!('U', view(A_list, :, :, i))
-
-    end
-
-end
-
-function cholesky_solve!(M_chol_A_list, M_chol_B_list, d::M, N, n) where {T, M<:CuArray{T, 1}}
-
-    CUDA.CUBLAS.trsv!('U', 'T', 'N', view(M_chol_A_list, :, :, 1), view(d, 1:n));
-
-    for i = 2:N #TODO pprof.jl
-
-        CUBLAS.gemv!('T', -1.0, view(M_chol_B_list, :, :, i-1), view(d, (i-2)*n+1:(i-1)*n), 1.0, view(d, (i-1)*n+1:i*n))
-
-        CUBLAS.trsv!('U', 'T', 'N',  view(M_chol_A_list, :, :, i), view(d, (i-1)*n+1:i*n))
-
-    end
-
-    CUBLAS.trsv!('U', 'N', 'N', view(M_chol_A_list, :, :, N), view(d, (N-1)*n+1:N*n));
-
-    for i = N-1:-1:1
-
-        CUBLAS.gemv!('N', -1.0, view(M_chol_B_list, :, :, i), view(d, i*n+1:(i+1)*n), 1.0, view(d, (i-1)*n+1:i*n))
-
-        CUBLAS.trsv!('U', 'N', 'N', view(M_chol_A_list, :, :, i), view(d, (i-1)*n+1:i*n))
-
-    end
-
-end
-
-function cholesky_solve!(M_chol_A_list, M_chol_B_list, d::M, N, n) where {T, M<:CuArray{T, 2}}
-
-    CUBLAS.trsm!('L', 'U', 'T', 'N', 1.0, view(M_chol_A_list, :, :, 1), view(d, 1:n, :));
-
-    for i = 2:N
-
-        CUBLAS.gemm!('T', 'N', -1.0, view(M_chol_B_list, :, :, i-1), view(d, (i-2)*n+1:(i-1)*n, :), 1.0, view(d, (i-1)*n+1:i*n, :))
-        CUBLAS.trsm!('L', 'U', 'T', 'N', 1.0, view(M_chol_A_list, :, :, i), view(d, (i-1)*n+1:i*n, :))
-
-    end
-
-    CUBLAS.trsm!('L', 'U', 'N', 'N', 1.0, view(M_chol_A_list, :, :, N), view(d, (N-1)*n+1:N*n, :));
-
-    for i = N-1:-1:1
-
-        CUBLAS.gemm!('N', 'N', -1.0, view(M_chol_B_list, :, :, i), view(d, i*n+1:(i+1)*n, :), 1.0, view(d, (i-1)*n+1:i*n, :))
-        CUBLAS.trsm!('L', 'U', 'N', 'N', 1.0, view(M_chol_A_list, :, :, i), view(d, (i-1)*n+1:i*n, :))
-
-    end
-
-end
-
 function factorize_CUDA!(data::BlockTriDiagData_CUDA)
 
 P = data.P
@@ -231,7 +171,7 @@ M_mn_2n_2 = data.M_mn_2n_2
 
     factor_list[:, :, i] .= M_mn_2n_2
 
-    CUBLAS.gemm!('T', 'N', 1.0, M_mn_2n_1, M_mn_2n_2, 0.0, M_2n)
+    mygemm!('T', 'N', 1.0, M_mn_2n_1, M_mn_2n_2, 0.0, M_2n)
 
     # Cache views for LHS updates
     lhs_a1 = view(LHS_A_list, :, :, i)
@@ -286,7 +226,7 @@ function solve_CUDA!(data::BlockTriDiagData_CUDA, d, x)
 
     # Compute RHS from Schur complement
     @inbounds for i = 1:P-1
-        CUBLAS.gemv!('T', -1.0, view(factor_list, :, :, i), view(d, I_separator[i]*n+1:I_separator[i+1]*n-n), 1.0, view(RHS, (i-1)*n+1:(i+1)*n))
+        mygemv!('T', -1.0, view(factor_list, :, :, i), view(d, I_separator[i]*n+1:I_separator[i+1]*n-n), 1.0, view(RHS, (i-1)*n+1:(i+1)*n))
     end
 
     # Solve system
@@ -309,9 +249,9 @@ function solve_CUDA!(data::BlockTriDiagData_CUDA, d, x)
     # Update d after Schur solve
     @inbounds for j = 1:P-1
         # Cache views and matrices
-        CUBLAS.gemv!('T', -1.0, view(B_list, :, :, I_separator[j]), view(x, I_separator[j]*n-n+1:I_separator[j]*n), 1.0, view(d, I_separator[j]*n+1:I_separator[j]*n+n))
+        mygemv!('T', -1.0, view(B_list, :, :, I_separator[j]), view(x, I_separator[j]*n-n+1:I_separator[j]*n), 1.0, view(d, I_separator[j]*n+1:I_separator[j]*n+n))
 
-        CUBLAS.gemv!('N', -1.0, view(B_list, :, :, I_separator[j+1]-1), view(x, I_separator[j+1]*n-n+1:I_separator[j+1]*n), 1.0, view(d, I_separator[j+1]*n-n-n+1:I_separator[j+1]*n-n))
+        mygemv!('N', -1.0, view(B_list, :, :, I_separator[j+1]-1), view(x, I_separator[j+1]*n-n+1:I_separator[j+1]*n), 1.0, view(d, I_separator[j+1]*n-n-n+1:I_separator[j+1]*n-n))
     end
 
     # Solve for non-separators
