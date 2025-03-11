@@ -1,6 +1,6 @@
 struct BlockTriDiagData_sequential_cholesky_factor{
     T, 
-    MT <: AbstractArray{T, 3}}
+    MT <:Vector{AbstractMatrix{T}}}
 
     N::Int
     n::Int
@@ -36,16 +36,16 @@ cholesky_factorize!(A_list, B_list, N)
 
 end
 
-function solve_sequential_cholesky_factor!(data::BlockTriDiagData_sequential_cholesky_factor, d, x)
+function solve_sequential_cholesky_factor!(data::BlockTriDiagData_sequential_cholesky_factor, d_list, x)
 
     N = data.N
     n = data.n
     A_list = data.A_list
     B_list = data.B_list
 
-    cholesky_solve!(A_list, B_list, d, N, n)
+    cholesky_solve!(A_list, B_list, d_list, N, n)
 
-    x .= d
+    x .= d_list
 
     return nothing
 end
