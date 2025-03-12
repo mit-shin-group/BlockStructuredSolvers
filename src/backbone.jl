@@ -57,3 +57,10 @@ function cholesky_solve!(M_chol_A_list, M_chol_B_list, d_list::M, N, n) where {T
     end
 
 end
+
+function copy_vector_of_arrays!(dest::Vector{<:AbstractArray}, src::Vector{<:AbstractArray})
+    @assert length(dest) == length(src) "Vectors must have the same length"
+    for i in eachindex(dest, src)
+        copy!(dest[i], src[i])
+    end
+end
