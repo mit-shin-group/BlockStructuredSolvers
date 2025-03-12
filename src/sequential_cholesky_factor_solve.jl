@@ -1,6 +1,6 @@
 struct BlockTriDiagData_sequential_cholesky_factor{
     T, 
-    MT <:Vector{AbstractMatrix{T}}}
+    MT <:Vector{<:AbstractMatrix{T}}}
 
     N::Int
     n::Int

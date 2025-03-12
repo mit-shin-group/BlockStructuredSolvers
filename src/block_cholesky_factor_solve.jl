@@ -1,10 +1,8 @@
 struct BlockTriDiagData{
     T, 
-    MR <: Vector{Vector{AbstractMatrix{T}}},
-    MT <: Vector{AbstractMatrix{T}},
     MS <: AbstractMatrix{T},
-    MU <: AbstractVector{T},
-    MV <: Vector{AbstractVector{T}}
+    MR <: Vector{<:Vector{<:MS}},
+    MT <: Vector{<:MS}
     }
 
     N::Int
@@ -22,7 +20,7 @@ struct BlockTriDiagData{
 
     factor_list::MR
 
-    RHS::MV
+    RHS::MT
 
     MA_chol_A_list::MR
     MA_chol_B_list::MR
@@ -32,7 +30,7 @@ struct BlockTriDiagData{
     M_2n::MS
     M_mn_2n_list_1::MT
     M_mn_2n_list_2::MT
-    v_2n::MU
+    v_2n::MS
 
     NextData::Union{BlockTriDiagData, Nothing}
 
@@ -47,73 +45,73 @@ function initialize(N, m, n, P, A_list_final, B_list_final, level)
 
         I_separator = 1:(m+1):N
 
-        LHS_A_list = Vector{AbstractMatrix{T}}(undef, P);
+        LHS_A_list = Vector{Matrix{T}}(undef, P); #TODO use similar to infer from input
         for i = 1:P
             LHS_A_list[i] = zeros(n, n);
         end
 
-        LHS_B_list = Vector{AbstractMatrix{T}}(undef, P-1);
+        LHS_B_list = Vector{Matrix{T}}(undef, P-1);
         for i = 1:P-1
             LHS_B_list[i] = zeros(n, n);
         end
 
-        RHS = Vector{AbstractVector{T}}(undef, P);
+        RHS = Vector{Matrix{T}}(undef, P);
         for i = 1:P
-            RHS[i] = zeros(n);
+            RHS[i] = zeros(n, 1);
         end
 
-        MA_chol_A_list = Vector{Vector{AbstractMatrix{T}}}(undef, P-1);
+        MA_chol_A_list = Vector{Vector{Matrix{T}}}(undef, P-1);
         for i = 1:P-1
-            MA_chol_A_list[i] = Vector{AbstractMatrix{T}}(undef, m);
+            MA_chol_A_list[i] = Vector{Matrix{T}}(undef, m);
             for j = 1:m
                 MA_chol_A_list[i][j] = zeros(n, n);
             end
         end
 
-        MA_chol_B_list = Vector{Vector{AbstractMatrix{T}}}(undef, P-1);
+        MA_chol_B_list = Vector{Vector{Matrix{T}}}(undef, P-1);
         for i = 1:P-1
-            MA_chol_B_list[i] = Vector{AbstractMatrix{T}}(undef, m-1);
+            MA_chol_B_list[i] = Vector{Matrix{T}}(undef, m-1);
             for j = 1:m-1
                 MA_chol_B_list[i][j] = zeros(n, n);
             end
         end
-        LHS_chol_A_list = Vector{AbstractMatrix{T}}(undef, P);
+        LHS_chol_A_list = Vector{Matrix{T}}(undef, P);
         for i = 1:P
             LHS_chol_A_list[i] = zeros(n, n);
         end
 
-        LHS_chol_B_list = Vector{AbstractMatrix{T}}(undef, P-1);
+        LHS_chol_B_list = Vector{Matrix{T}}(undef, P-1);
         for i = 1:P-1
             LHS_chol_B_list[i] = zeros(n, n);
         end
-        factor_list = Vector{Vector{AbstractMatrix{T}}}(undef, P-1);
+        factor_list = Vector{Vector{Matrix{T}}}(undef, P-1);
         for i = 1:P-1
-            factor_list[i] = Vector{AbstractMatrix{T}}(undef, m);
+            factor_list[i] = Vector{Matrix{T}}(undef, m);
             for j = 1:m
                 factor_list[i][j] = zeros(n, 2*n);
             end
         end
 
         M_2n = zeros(2*n, 2*n);
-        M_mn_2n_list_1 = Vector{AbstractMatrix{T}}(undef, m);
+        M_mn_2n_list_1 = Vector{Matrix{T}}(undef, m);
         for i = 1:m
             M_mn_2n_list_1[i] = zeros(n, 2*n);
         end
-        M_mn_2n_list_2 = Vector{AbstractMatrix{T}}(undef, m);
+        M_mn_2n_list_2 = Vector{Matrix{T}}(undef, m);
         for i = 1:m
             M_mn_2n_list_2[i] = zeros(n, 2*n);
         end
-        v_2n = zeros(2*n);
+        v_2n = zeros(2*n, 1);
 
         if i == level
             A_list = A_list_final
             B_list = B_list_final
         else
-            A_list = Vector{AbstractMatrix{T}}(undef, N);
+            A_list = Vector{Matrix{T}}(undef, N);
             for i = 1:N
                 A_list[i] = zeros(n, n);
             end
-            B_list = Vector{AbstractMatrix{T}}(undef, N-1);
+            B_list = Vector{Matrix{T}}(undef, N-1);
             for i = 1:N-1
                 B_list[i] = zeros(n, n);
             end
@@ -182,10 +180,8 @@ function factorize!(data::BlockTriDiagData)
         cholesky_factorize!(MA_chol_A_list[i], MA_chol_B_list[i], m) #TODO tiny allocation here about 2, belongs to potrf!
 
         # Set up M_mn_2n_list_! for Schur complement
-        @views begin #TODO 400 allocations here
-            M_mn_2n_list_1[1][:, 1:n] .= B_list[I_separator[i]]'
-            M_mn_2n_list_1[m][:, n+1:2*n] .= B_list[I_separator[i+1]-1]
-        end
+        view(M_mn_2n_list_1[1], :, 1:n) .= B_list[I_separator[i]]'
+        view(M_mn_2n_list_1[m], :, n+1:2*n) .= B_list[I_separator[i+1]-1]
 
         # Copy M_mn_2n_list_1 to M_mn_2n_list_2
         copy_vector_of_arrays!(M_mn_2n_list_2, M_mn_2n_list_1)
@@ -202,11 +198,9 @@ function factorize!(data::BlockTriDiagData)
         end
 
         # Update LHS matrices
-        @views begin #TODO 200 allocations here
-            LHS_A_list[i] .-= M_2n[1:n, 1:n]
-            LHS_A_list[i+1] .-= M_2n[n+1:2*n, n+1:2*n]
-            LHS_B_list[i] .-= M_2n[1:n, n+1:2*n]
-        end
+        LHS_A_list[i] .-= view(M_2n, 1:n, 1:n)
+        LHS_A_list[i+1] .-= view(M_2n, n+1:2*n, n+1:2*n)
+        LHS_B_list[i] .-= view(M_2n, 1:n, n+1:2*n)
 
         LHS_A_list[i] .+= A_list[I_separator[i]]
     end
@@ -248,13 +242,13 @@ function solve!(data::BlockTriDiagData, d_list, x)
     copy_vector_of_arrays!(RHS, view(d_list, I_separator))
 
     # Compute RHS from Schur complement
-    @inbounds for i = 1:P-1 # 100 allocations here
+    for i = 1:P-1
         fill!(temp, 0.0)
         for j = 1:m
-            mygemv!('T', -1.0, factor_list[i][j], d_list[I_separator[i]+j], 1.0, temp)
+            mygemm!('T', 'N', -1.0, factor_list[i][j], d_list[I_separator[i]+j], 1.0, temp)
         end
-        RHS[i] .+= view(temp, 1:n)
-        RHS[i+1] .+= view(temp, n+1:2*n)
+        RHS[i] .+= view(temp, 1:n, :)
+        RHS[i+1] .+= view(temp, n+1:2*n, :)
     end
 
     # Solve system
@@ -272,8 +266,8 @@ function solve!(data::BlockTriDiagData, d_list, x)
 
     # Update d after Schur solve
     @inbounds for j = 1:P-1
-        mygemv!('T', -1.0, B_list[I_separator[j]], x[I_separator[j]], 1.0, d_list[I_separator[j]+1])
-        mygemv!('N', -1.0, B_list[I_separator[j+1]-1], x[I_separator[j+1]], 1.0, d_list[I_separator[j+1]-1])
+        mygemm!('T', 'N', -1.0, B_list[I_separator[j]], x[I_separator[j]], 1.0, d_list[I_separator[j]+1])
+        mygemm!('N', 'N', -1.0, B_list[I_separator[j+1]-1], x[I_separator[j+1]], 1.0, d_list[I_separator[j+1]-1])
     end
 
     # Solve for non-separators

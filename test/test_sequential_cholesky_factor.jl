@@ -7,26 +7,26 @@
         println("Run $run/3")
         
         #######################################
-        A_list = Vector{AbstractMatrix{Float64}}(undef, N)
+        A_list = Vector{Matrix{Float64}}(undef, N)
         for i in 1:N
             temp = randn(n, n)
             A_list[i] = temp * temp' + n * I
         end
 
-        B_list = Vector{AbstractMatrix{Float64}}(undef, N-1)
+        B_list = Vector{Matrix{Float64}}(undef, N-1)
         for i in 1:N-1
             temp = randn(n, n)
             B_list[i] = temp
         end
 
-        x_list = Vector{AbstractVector{Float64}}(undef, N)
-        x = Vector{AbstractVector{Float64}}(undef, N)
+        x_list = Vector{Matrix{Float64}}(undef, N)
+        x = Vector{Matrix{Float64}}(undef, N)
         for i in 1:N
-            x_list[i] = rand(n)
-            x[i] = zeros(n)
+            x_list[i] = rand(n, 1)
+            x[i] = zeros(n, 1)
         end
 
-        d_list = Vector{AbstractVector{Float64}}(undef, N)
+        d_list = Vector{Matrix{Float64}}(undef, N)
         d_list[1] = A_list[1] * x_list[1] + B_list[1] * x_list[2]
         @views for i = 2:N-1
             d_list[i] = B_list[i-1]' * x_list[i-1] + A_list[i] * x_list[i] + B_list[i] * x_list[i+1]

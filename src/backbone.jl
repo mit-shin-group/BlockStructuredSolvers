@@ -12,31 +12,7 @@ function cholesky_factorize!(A_list, B_list, N)
 
 end
 
-function cholesky_solve!(M_chol_A_list, M_chol_B_list, d_list::M, N, n) where {T, M<:AbstractVector{AbstractVector{T}}}
-
-    mytrsv!('U', 'T', 'N', M_chol_A_list[1], d_list[1]);
-
-    for i = 2:N #TODO pprof.jl
-
-        mygemv!('T', -1.0, M_chol_B_list[i-1], d_list[i-1], 1.0, d_list[i])
-
-        mytrsv!('U', 'T', 'N', M_chol_A_list[i], d_list[i])
-
-    end
-
-    mytrsv!('U', 'N', 'N', M_chol_A_list[N], d_list[N])
-
-    for i = N-1:-1:1
-
-        mygemv!('N', -1.0, M_chol_B_list[i], d_list[i+1], 1.0, d_list[i])
-
-        mytrsv!('U', 'N', 'N', M_chol_A_list[i], d_list[i])
-
-    end
-
-end
-
-function cholesky_solve!(M_chol_A_list, M_chol_B_list, d_list::M, N, n) where {T, M<:AbstractVector{AbstractMatrix{T}}}
+function cholesky_solve!(M_chol_A_list, M_chol_B_list, d_list::M, N, n) where {T, M<:AbstractVector{<:AbstractMatrix{T}}}
 
     mytrsm!('L', 'U', 'T', 'N', 1.0, M_chol_A_list[1], d_list[1]);
 
@@ -62,6 +38,6 @@ function copy_vector_of_arrays!(dest::AbstractVector{<:AbstractArray}, src::Abst
     @assert length(dest) == length(src) "Vectors must have the same length"
 
     for i in eachindex(dest, src)
-        copy!(dest[i], src[i])  # Works for both matrices and views
+        dest[i] .= src[i]
     end
 end
