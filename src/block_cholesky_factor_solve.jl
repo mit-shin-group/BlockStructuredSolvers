@@ -30,8 +30,8 @@ struct BlockTriDiagData{
     LHS_chol_B_list::MT
 
     M_2n::MS
-    M_mn_2n_1::MT
-    M_mn_2n_2::MT
+    M_mn_2n_list_1::MT
+    M_mn_2n_list_2::MT
     v_2n::MU
 
     NextData::Union{BlockTriDiagData, Nothing}
@@ -95,13 +95,13 @@ function initialize(N, m, n, P, A_list_final, B_list_final, level)
         end
 
         M_2n = zeros(2*n, 2*n);
-        M_mn_2n_1 = Vector{AbstractMatrix{T}}(undef, m);
+        M_mn_2n_list_1 = Vector{AbstractMatrix{T}}(undef, m);
         for i = 1:m
-            M_mn_2n_1[i] = zeros(n, 2*n);
+            M_mn_2n_list_1[i] = zeros(n, 2*n);
         end
-        M_mn_2n_2 = Vector{AbstractMatrix{T}}(undef, m);
+        M_mn_2n_list_2 = Vector{AbstractMatrix{T}}(undef, m);
         for i = 1:m
-            M_mn_2n_2[i] = zeros(n, 2*n);
+            M_mn_2n_list_2[i] = zeros(n, 2*n);
         end
         v_2n = zeros(2*n);
 
@@ -136,8 +136,8 @@ function initialize(N, m, n, P, A_list_final, B_list_final, level)
             LHS_chol_A_list,
             LHS_chol_B_list,
             M_2n,
-            M_mn_2n_1,
-            M_mn_2n_2,
+            M_mn_2n_list_1,
+            M_mn_2n_list_2,
             v_2n,
             data
             );
@@ -166,8 +166,8 @@ function factorize!(data::BlockTriDiagData)
     MA_chol_A_list = data.MA_chol_A_list
     MA_chol_B_list = data.MA_chol_B_list
     M_2n = data.M_2n
-    M_mn_2n_1 = data.M_mn_2n_1
-    M_mn_2n_2 = data.M_mn_2n_2
+    M_mn_2n_list_1 = data.M_mn_2n_list_1
+    M_mn_2n_list_2 = data.M_mn_2n_list_2
 
     # Main factorization loop
     @inbounds for i = 1:P-1
@@ -179,30 +179,30 @@ function factorize!(data::BlockTriDiagData)
         copy_vector_of_arrays!(MA_chol_B_list[i], view(B_list, I_separator[i]+1:I_separator[i]+m-1))
 
         # Perform Cholesky factorization
-        cholesky_factorize!(MA_chol_A_list[i], MA_chol_B_list[i], m)
+        cholesky_factorize!(MA_chol_A_list[i], MA_chol_B_list[i], m) #TODO tiny allocation here about 2, belongs to potrf!
 
-        # Set up M_mn_2n_1 for Schur complement
-        @views begin
-            M_mn_2n_1[1][:, 1:n] .= B_list[I_separator[i]]'
-            M_mn_2n_1[m][:, n+1:2*n] .= B_list[I_separator[i+1]-1]
+        # Set up M_mn_2n_list_! for Schur complement
+        @views begin #TODO 400 allocations here
+            M_mn_2n_list_1[1][:, 1:n] .= B_list[I_separator[i]]'
+            M_mn_2n_list_1[m][:, n+1:2*n] .= B_list[I_separator[i+1]-1]
         end
 
-        # Copy M_mn_2n_1 to M_mn_2n_2
-        copy_vector_of_arrays!(M_mn_2n_2, M_mn_2n_1)
+        # Copy M_mn_2n_list_1 to M_mn_2n_list_2
+        copy_vector_of_arrays!(M_mn_2n_list_2, M_mn_2n_list_1)
 
         # Solve using Cholesky factors
-        cholesky_solve!(MA_chol_A_list[i], MA_chol_B_list[i], M_mn_2n_2, m, n)
+        cholesky_solve!(MA_chol_A_list[i], MA_chol_B_list[i], M_mn_2n_list_2, m, n)
 
         # Copy results to factor_list
-        copy_vector_of_arrays!(factor_list[i], M_mn_2n_2)
+        copy_vector_of_arrays!(factor_list[i], M_mn_2n_list_2)
 
         # Compute Schur complement
         for j = 1:m
-            mygemm!('T', 'N', 1.0, M_mn_2n_1[j], M_mn_2n_2[j], 1.0, M_2n)
+            mygemm!('T', 'N', 1.0, M_mn_2n_list_1[j], M_mn_2n_list_2[j], 1.0, M_2n)
         end
 
         # Update LHS matrices
-        @views begin
+        @views begin #TODO 200 allocations here
             LHS_A_list[i] .-= M_2n[1:n, 1:n]
             LHS_A_list[i+1] .-= M_2n[n+1:2*n, n+1:2*n]
             LHS_B_list[i] .-= M_2n[1:n, n+1:2*n]
@@ -219,8 +219,8 @@ function factorize!(data::BlockTriDiagData)
         LHS_chol_A_list = data.LHS_chol_A_list
         LHS_chol_B_list = data.LHS_chol_B_list
 
-        copy_vector_of_arrays!(data.LHS_chol_A_list, LHS_A_list)
-        copy_vector_of_arrays!(data.LHS_chol_B_list, LHS_B_list)
+        copy_vector_of_arrays!(LHS_chol_A_list, LHS_A_list)
+        copy_vector_of_arrays!(LHS_chol_B_list, LHS_B_list)
 
         cholesky_factorize!(LHS_chol_A_list, LHS_chol_B_list, P)
     else
@@ -248,7 +248,7 @@ function solve!(data::BlockTriDiagData, d_list, x)
     copy_vector_of_arrays!(RHS, view(d_list, I_separator))
 
     # Compute RHS from Schur complement
-    @inbounds for i = 1:P-1
+    @inbounds for i = 1:P-1 # 100 allocations here
         fill!(temp, 0.0)
         for j = 1:m
             mygemv!('T', -1.0, factor_list[i][j], d_list[I_separator[i]+j], 1.0, temp)
