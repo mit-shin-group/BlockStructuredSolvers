@@ -40,81 +40,41 @@ function initialize(N, m, n, P, A_list_final, B_list_final, level)
 
     data = nothing;
     T = eltype(A_list_final[1]);
-
+    
     for i = 1:level
 
         I_separator = 1:(m+1):N
 
-        LHS_A_list = Vector{Matrix{T}}(undef, P); #TODO use similar to infer from input
-        for i = 1:P
-            LHS_A_list[i] = zeros(n, n);
+        # TODO slow
+        if i == 1
+            LHS_A_list = [zero(similar(A_list_final[1], n, n)) for i in 1:P];
+            LHS_B_list = [zero(similar(B_list_final[1], n, n)) for i in 1:P-1];
+        else
+            LHS_A_list = deepcopy(data.A_list)
+            LHS_B_list = deepcopy(data.B_list)
         end
 
-        LHS_B_list = Vector{Matrix{T}}(undef, P-1);
-        for i = 1:P-1
-            LHS_B_list[i] = zeros(n, n);
-        end
+        RHS = [zero(similar(A_list_final[1], n, 1)) for i in 1:P];
 
-        RHS = Vector{Matrix{T}}(undef, P);
-        for i = 1:P
-            RHS[i] = zeros(n, 1);
-        end
+        MA_chol_A_list = [[similar(A_list_final[1], n, n) for j = 1:m] for i = 1:P-1];
+        MA_chol_B_list = [[similar(A_list_final[1], n, n) for j = 1:m-1] for i = 1:P-1];
 
-        MA_chol_A_list = Vector{Vector{Matrix{T}}}(undef, P-1);
-        for i = 1:P-1
-            MA_chol_A_list[i] = Vector{Matrix{T}}(undef, m);
-            for j = 1:m
-                MA_chol_A_list[i][j] = zeros(n, n);
-            end
-        end
+        LHS_chol_A_list = deepcopy(LHS_A_list);
+        LHS_chol_B_list = deepcopy(LHS_B_list);
 
-        MA_chol_B_list = Vector{Vector{Matrix{T}}}(undef, P-1);
-        for i = 1:P-1
-            MA_chol_B_list[i] = Vector{Matrix{T}}(undef, m-1);
-            for j = 1:m-1
-                MA_chol_B_list[i][j] = zeros(n, n);
-            end
-        end
-        LHS_chol_A_list = Vector{Matrix{T}}(undef, P);
-        for i = 1:P
-            LHS_chol_A_list[i] = zeros(n, n);
-        end
+        factor_list = [[similar(A_list_final[1], n, 2*n) for j = 1:m] for i = 1:P-1];
 
-        LHS_chol_B_list = Vector{Matrix{T}}(undef, P-1);
-        for i = 1:P-1
-            LHS_chol_B_list[i] = zeros(n, n);
-        end
-        factor_list = Vector{Vector{Matrix{T}}}(undef, P-1);
-        for i = 1:P-1
-            factor_list[i] = Vector{Matrix{T}}(undef, m);
-            for j = 1:m
-                factor_list[i][j] = zeros(n, 2*n);
-            end
-        end
-
-        M_2n = zeros(2*n, 2*n);
-        M_mn_2n_list_1 = Vector{Matrix{T}}(undef, m);
-        for i = 1:m
-            M_mn_2n_list_1[i] = zeros(n, 2*n);
-        end
-        M_mn_2n_list_2 = Vector{Matrix{T}}(undef, m);
-        for i = 1:m
-            M_mn_2n_list_2[i] = zeros(n, 2*n);
-        end
-        v_2n = zeros(2*n, 1);
+        M_2n = similar(A_list_final[1], 2*n, 2*n);
+        M_mn_2n_list_1 = [zero(similar(A_list_final[1], n, 2*n)) for i in 1:m];
+        M_mn_2n_list_2 = deepcopy(M_mn_2n_list_1);
+        v_2n = similar(A_list_final[1], 2*n, 1);
 
         if i == level
             A_list = A_list_final
             B_list = B_list_final
         else
-            A_list = Vector{Matrix{T}}(undef, N);
-            for i = 1:N
-                A_list[i] = zeros(n, n);
-            end
-            B_list = Vector{Matrix{T}}(undef, N-1);
-            for i = 1:N-1
-                B_list[i] = zeros(n, n);
-            end
+            A_list = [zero(similar(A_list_final[1], n, n)) for i in 1:N];
+            B_list = [zero(similar(B_list_final[1], n, n)) for i in 1:N-1];
         end
 
         data = BlockTriDiagData(

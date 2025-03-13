@@ -33,3 +33,15 @@ function mytrsm!(side::Char, uplo::Char, transa::Char, diag::Char, alpha::Number
     latrsm!(side, uplo, transa, diag, alpha, A, B)
 
 end
+
+function mynorm(A::Vector{<:CuMatrix{T}}) where {T}
+
+    cunorm(A)
+
+end
+
+function mynorm(A::Vector{<:AbstractMatrix{T}}) where {T}
+
+    lanorm(A)
+
+end
