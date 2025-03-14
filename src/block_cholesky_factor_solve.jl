@@ -110,10 +110,6 @@ function factorize!(data::BlockTriDiagData)
     temp_B_list = data.temp_B_list
 
     # Copy data for factorization
-    # @inbounds for i in 1:P-1
-    #     temp_B_list[2*(i-1)+1] .= B_list[I_separator[i]]
-    #     temp_B_list[2*i] .= B_list[I_separator[i+1]-1]
-    # end   
     temp_B_list[1:2:end] .= B_list[I_separator[1:P-1]]
     temp_B_list[2:2:end] .= B_list[I_separator[2:P].-1]
     LHS_A_list .+= A_list[I_separator]
