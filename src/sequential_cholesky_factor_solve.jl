@@ -39,11 +39,10 @@ end
 function solve_sequential_cholesky_factor!(data::BlockTriDiagData_sequential_cholesky_factor, d_list, x)
 
     N = data.N
-    n = data.n
     A_list = data.A_list
     B_list = data.B_list
 
-    cholesky_solve!(A_list, B_list, d_list, N, n)
+    cholesky_solve!(A_list, B_list, d_list, N)
 
     x .= d_list
 

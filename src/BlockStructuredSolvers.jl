@@ -14,10 +14,12 @@ import CUDA: norm as cunorm
 
 # CUDA types
 import CUDA: StridedCuMatrix, CuMatrix, CuArray
+import CUDA.CUBLAS: gemm_batched!, trsm_batched! 
+import CUDA.CUSOLVER: potrfBatched!
 
 # Export functions
-export mypotrf!, mygemm!, mytrsm!, mynorm
-export cholesky_factorize!, cholesky_solve!
+export mynorm
+# export cholesky_factorize!, cholesky_solve!
 export initialize, factorize!, solve!
 export initialize_sequential_cholesky_factor, factorize_sequential_cholesky_factor!, solve_sequential_cholesky_factor!
 
