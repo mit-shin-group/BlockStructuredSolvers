@@ -72,7 +72,7 @@ function copy_vector_of_arrays!(dest::AbstractVector{<:AbstractArray}, src::Abst
     end
 end
 
-function func1!(temp_B_list, A_list::Vector{<:AbstractMatrix}, B_list::Vector{<:AbstractMatrix}, LHS_A_list, LHS_B_list, I_separator, factor_list, M_2n_list, factor_list_temp, P, m, n)
+function func1!(A_list::Vector{<:AbstractMatrix}, B_list::Vector{<:AbstractMatrix}, LHS_A_list, LHS_B_list, temp_B_list, factor_list, factor_list_temp, M_2n_list, I_separator, P, m, n)
 
     @inbounds for i = 1:P-1
 
@@ -105,7 +105,7 @@ function func1!(temp_B_list, A_list::Vector{<:AbstractMatrix}, B_list::Vector{<:
 
 end
 
-function func1!(temp_B_list, A_list::Vector{<:CuMatrix}, B_list::Vector{<:CuMatrix}, LHS_A_list, LHS_B_list, I_separator, factor_list, M_2n_list, factor_list_temp, P, m, n)
+function func1!(A_list::Vector{<:CuMatrix}, B_list::Vector{<:CuMatrix}, LHS_A_list, LHS_B_list, temp_B_list, factor_list, factor_list_temp, M_2n_list, I_separator, P, m, n)
            
     # Perform Cholesky factorization
     cholesky_factorize_batched!(A_list, B_list, I_separator, P, m)
