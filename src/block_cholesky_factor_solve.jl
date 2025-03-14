@@ -1,7 +1,6 @@
 struct BlockTriDiagData{
     T, 
-    MS <: AbstractMatrix{T},
-    MT <: Vector{<:MS}
+    MT <: Vector{<:AbstractMatrix{T}}
     }
 
     N::Int
@@ -20,18 +19,12 @@ struct BlockTriDiagData{
 
     factor_list::MT
     temp_list::MT
+    temp_B_list::MT
 
     RHS::MT
 
-    MA_chol_A_list::MT
-    MA_chol_B_list::MT
-    LHS_chol_A_list::MT
-    LHS_chol_B_list::MT
-
-    M_2n::MS
-    M_n_2n_list_1::MT
-    M_n_2n_list_2::MT
-    # v_2n::MS
+    M_2n_list::MT
+    factor_list_temp::MT
 
     NextData::Union{BlockTriDiagData, Nothing}
 
@@ -58,34 +51,12 @@ function initialize(N, m, n, P, A_list_final, B_list_final, level)
 
         RHS = [zero(similar(A_list_final[1], n, 1)) for i in 1:P];
 
-        MA_chol_A_list = [similar(A_list_final[1], n, n) for j = 1:m*(P-1)];
-        MA_chol_B_list = [similar(A_list_final[1], n, n) for j = 1:(m-1)*(P-1)];  
-
-        # MA_chol_A_list = Vector{Vector{T}}(undef, P-1)
-        # for i = 1:P-1
-        #     MA_chol_A_list[i] = Vector{T}(undef, m)
-        #     for j = 1:m
-        #         MA_chol_A_list[i][j] = T(undef, n, n)
-        #     end
-        # end
-        # MA_chol_B_list = Vector{Vector{T}}(undef, P-1)
-        # for i = 1:P-1
-        #     MA_chol_B_list[i] = Vector{T}(undef, m-1)
-        #     for j = 1:m-1
-        #         MA_chol_B_list[i][j] = T(undef, n, n)
-        #     end
-        # end
-
-        LHS_chol_A_list = deepcopy(LHS_A_list);
-        LHS_chol_B_list = deepcopy(LHS_B_list);
-
         factor_list = [similar(A_list_final[1], n, 2*n) for j = 1:m*(P-1)];
         temp_list = [zero(similar(A_list_final[1], 2*n, 1)) for i = 1:P-1];
+        temp_B_list = [similar(A_list_final[1], n, n) for i = 1:2*(P-1)];
 
-        M_2n = similar(A_list_final[1], 2*n, 2*n);
-        M_n_2n_list_1 = [zero(similar(A_list_final[1], n, 2*n)) for i in 1:m];
-        M_n_2n_list_2 = deepcopy(M_n_2n_list_1);
-        v_2n = similar(A_list_final[1], 2*n, 1);
+        M_2n_list = [zero(similar(A_list_final[1], 2*n, 2*n)) for i in 1:P-1];
+        factor_list_temp = [zero(similar(A_list_final[1], n, 2*n)) for i in 1:m*(P-1)];
 
         if i == level
             A_list = A_list_final
@@ -108,14 +79,10 @@ function initialize(N, m, n, P, A_list_final, B_list_final, level)
             LHS_B_list,
             factor_list,
             temp_list,
+            temp_B_list,
             RHS,
-            MA_chol_A_list,
-            MA_chol_B_list,
-            LHS_chol_A_list,
-            LHS_chol_B_list,
-            M_2n,
-            M_n_2n_list_1,
-            M_n_2n_list_2,
+            M_2n_list,
+            factor_list_temp,
             data
             );
 
@@ -133,69 +100,29 @@ function factorize!(data::BlockTriDiagData)
     n = data.n
     m = data.m
     I_separator = data.I_separator
-
-    # Cache all arrays at the start
     A_list = data.A_list
     B_list = data.B_list
     LHS_A_list = data.LHS_A_list
     LHS_B_list = data.LHS_B_list
     factor_list = data.factor_list
-    MA_chol_A_list = data.MA_chol_A_list
-    MA_chol_B_list = data.MA_chol_B_list
-    M_2n = data.M_2n
-    M_n_2n_list_1 = data.M_n_2n_list_1
-    M_n_2n_list_2 = data.M_n_2n_list_2
+    M_2n_list = data.M_2n_list
+    factor_list_temp = data.factor_list_temp
+    temp_B_list = data.temp_B_list
+
+    # Copy data for factorization
+    @inbounds for i in 1:P-1
+        temp_B_list[2*(i-1)+1] .= B_list[I_separator[i]]
+        temp_B_list[2*i] .= B_list[I_separator[i+1]-1]
+        LHS_A_list[i] .+= A_list[I_separator[i]]
+    end   
+    LHS_A_list[P] .+= A_list[I_separator[P]]
 
     # Main factorization loop
-    @inbounds for i = 1:P-1 #TODO parallelize
-        # Reset M_2n to zero
-        fill!(M_2n, 0.0)
-
-        # Copy data for factorization
-        copy_vector_of_arrays!(MA_chol_A_list[(i-1)*m+1:i*m], view(A_list, I_separator[i]+1:I_separator[i]+m))
-        copy_vector_of_arrays!(MA_chol_B_list[(i-1)*(m-1)+1:i*(m-1)], view(B_list, I_separator[i]+1:I_separator[i]+m-1))
-
-        # Perform Cholesky factorization
-        cholesky_factorize!(MA_chol_A_list[(i-1)*m+1:i*m], MA_chol_B_list[(i-1)*(m-1)+1:i*(m-1)], m) #tiny allocation here about 2, belongs to potrf!
-
-        # Set up M_n_2n_list_! for Schur complement
-        view(M_n_2n_list_1[1], :, 1:n) .= B_list[I_separator[i]]'
-        view(M_n_2n_list_1[m], :, n+1:2*n) .= B_list[I_separator[i+1]-1]
-
-        # Copy M_n_2n_list_1 to M_n_2n_list_2
-        copy_vector_of_arrays!(M_n_2n_list_2, M_n_2n_list_1)
-
-        # Solve using Cholesky factors
-        cholesky_solve!(MA_chol_A_list[(i-1)*m+1:i*m], MA_chol_B_list[(i-1)*(m-1)+1:i*(m-1)], M_n_2n_list_2, m)
-
-        # Copy results to factor_list
-        copy_vector_of_arrays!(factor_list[(i-1)*m+1:i*m], M_n_2n_list_2)
-
-        # Compute Schur complement
-        for j = 1:m
-            mygemm!('T', 'N', 1.0, M_n_2n_list_1[j], M_n_2n_list_2[j], 1.0, M_2n)
-        end
-
-        # Update LHS matrices
-        LHS_A_list[i] .-= view(M_2n, 1:n, 1:n)
-        LHS_A_list[i+1] .-= view(M_2n, n+1:2*n, n+1:2*n)
-        LHS_B_list[i] .-= view(M_2n, 1:n, n+1:2*n)
-
-        LHS_A_list[i] .+= A_list[I_separator[i]]
-    end
-
-    # Final update for LHS_A_list
-    LHS_A_list[P] .+= A_list[I_separator[P]]
+    func1!(temp_B_list, A_list, B_list, LHS_A_list, LHS_B_list, I_separator, factor_list, M_2n_list, factor_list_temp, P, m, n)
 
     # Recursive factorization
     if isnothing(data.NextData)
-        LHS_chol_A_list = data.LHS_chol_A_list
-        LHS_chol_B_list = data.LHS_chol_B_list
-
-        copy_vector_of_arrays!(LHS_chol_A_list, LHS_A_list)
-        copy_vector_of_arrays!(LHS_chol_B_list, LHS_B_list)
-
-        cholesky_factorize!(LHS_chol_A_list, LHS_chol_B_list, P)
+        cholesky_factorize!(LHS_A_list, LHS_B_list, P)
     else
         copy_vector_of_arrays!(data.NextData.A_list, LHS_A_list)
         copy_vector_of_arrays!(data.NextData.B_list, LHS_B_list)
@@ -204,18 +131,12 @@ function factorize!(data::BlockTriDiagData)
 end
 
 function solve!(data::BlockTriDiagData, d_list, x)
+
     P = data.P
     n = data.n
     m = data.m
     I_separator = data.I_separator
     I_non_separator = data.I_non_separator
-
-    # Cache frequently accessed arrays
-    B_list = data.B_list
-    MA_chol_A_list = data.MA_chol_A_list
-    MA_chol_B_list = data.MA_chol_B_list
-    factor_list = data.factor_list
-    temp_list = data.temp_list
     RHS = data.RHS
 
     # Copy d_list to RHS
@@ -223,27 +144,23 @@ function solve!(data::BlockTriDiagData, d_list, x)
     d_list_non_separator = view(d_list, I_non_separator)
 
     # Compute RHS from Schur complement
-    func2!(factor_list, d_list_non_separator, temp_list, RHS, P, m, n)
+    func2!(data.factor_list, d_list_non_separator, data.temp_list, RHS, P, m, n)
 
     # Solve system
     if isnothing(data.NextData)
-        LHS_chol_A_list = data.LHS_chol_A_list
-        LHS_chol_B_list = data.LHS_chol_B_list
-
-        cholesky_solve!(LHS_chol_A_list, LHS_chol_B_list, RHS, P)
-
-        # Assign RHS to x for separators
+        cholesky_solve!(data.LHS_A_list, data.LHS_B_list, RHS, P)
         copy_vector_of_arrays!(view(x, I_separator), RHS)
     else
         solve!(data.NextData, RHS, view(x, I_separator))
     end
 
     # Update d after Schur solve
-    func3!(B_list, x, d_list, I_separator, P)
+    func3!(data.temp_B_list, x, d_list, I_separator, P)
 
     # Solve for non-separators
-    func4!(MA_chol_A_list, MA_chol_B_list, d_list_non_separator, I_separator, P, m)
+    func4!(data.A_list, data.B_list, d_list_non_separator, I_separator, P, m)
 
     copy_vector_of_arrays!(view(x, I_non_separator), d_list_non_separator)
+
     return nothing
 end
