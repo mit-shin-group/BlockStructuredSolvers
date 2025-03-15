@@ -3,6 +3,7 @@ using CUDA
 using Random
 using LDLFactorizations
 using HSL
+using CUDSS
 using BlockStructuredSolvers
 
 import Pkg
@@ -51,6 +52,14 @@ function run(m, n, P_start, level)
 
     LDLT = nothing
 
+    BigMatrix_cudss = CUSPARSE.CuSparseMatrixCSR(BigMatrix)
+    d_cudss = CuArray(d)
+    cudss_factor_time = @elapsed chol = CUDSS.cholesky(BigMatrix_cudss; check=false)
+    cudss_solve_time = @elapsed chol \ d_cudss
+
+    BigMatrix_cudss = nothing
+    chol = nothing
+
     # Warmup factorization
     data = initialize(P_start * (m + 1) - m, m, n, P_start, A_list, B_list, level)
     data_gpu = initialize(P_start * (m + 1) - m, m, n, P_start, A_list_gpu, B_list_gpu, level)
@@ -71,6 +80,8 @@ function run(m, n, P_start, level)
     chol_solve_time, 
     ldl_factor_time, 
     ldl_solve_time, 
+    cudss_factor_time, 
+    cudss_solve_time, 
     cpu_factorize_time, 
     cpu_solve_time, 
     gpu_factorize_time, 
@@ -93,6 +104,9 @@ function benchmark_factorization_and_solve(iter)
     ldl_factor_times = Float64[]
     ldl_solve_times = Float64[]
 
+    cudss_factor_times = Float64[]
+    cudss_solve_times = Float64[]
+
     cpu_factor_times = Float64[]
     cpu_solve_times = Float64[]
 
@@ -104,9 +118,9 @@ function benchmark_factorization_and_solve(iter)
 
     println("Starting warmup...")
 
-    results = run(2, 10, 3, 3)
+    _ = run(2, 10, 3, 3)
 
-    (m, n, P_start, level) = (4, 200, 3, 5) #(4, 200, 3, 4)
+    (m, n, P_start, level) = (4, 200, 3, 4) #(4, 200, 3, 4)
 
     P = P_start
     N = P * (m + 1) - m
@@ -130,14 +144,17 @@ function benchmark_factorization_and_solve(iter)
         push!(ldl_factor_times, results[5])
         push!(ldl_solve_times, results[6])
 
-        push!(cpu_factor_times, results[7])
-        push!(cpu_solve_times, results[8])
+        push!(cudss_factor_times, results[7])
+        push!(cudss_solve_times, results[8])
 
-        push!(gpu_factor_times, results[9])
-        push!(gpu_solve_times, results[10])
+        push!(cpu_factor_times, results[9])
+        push!(cpu_solve_times, results[10])
 
-        push!(sequential_factor_times, results[11])
-        push!(sequential_solve_times, results[12])
+        push!(gpu_factor_times, results[11])
+        push!(gpu_solve_times, results[12])
+
+        push!(sequential_factor_times, results[13])
+        push!(sequential_solve_times, results[14])
     end
 
     # Compute and print the average times
@@ -146,6 +163,7 @@ function benchmark_factorization_and_solve(iter)
     @printf("MA57 - Factorize: %.6f ms, Solve: %.6f ms\n", mean(ma57_factor_times) * 1000, mean(ma57_solve_times) * 1000)
     @printf("Cholesky - Factorize: %.6f ms, Solve: %.6f ms\n", mean(chol_factor_times) * 1000, mean(chol_solve_times) * 1000)
     @printf("LDLᵀ - Factorize: %.6f ms, Solve: %.6f ms\n", mean(ldl_factor_times) * 1000, mean(ldl_solve_times) * 1000)
+    @printf("CUDSS - Factorize: %.6f ms, Solve: %.6f ms\n", mean(cudss_factor_times) * 1000, mean(cudss_solve_times) * 1000)
     @printf("CPU - Factorize: %.6f ms, Solve: %.6f ms\n", mean(cpu_factor_times) * 1000, mean(cpu_solve_times) * 1000)
     @printf("GPU - Factorize: %.6f ms, Solve: %.6f ms\n", mean(gpu_factor_times) * 1000, mean(gpu_solve_times) * 1000)
     @printf("Sequential - Factorize: %.6f ms, Solve: %.6f ms\n", mean(sequential_factor_times) * 1000, mean(sequential_solve_times) * 1000)
@@ -155,6 +173,7 @@ function benchmark_factorization_and_solve(iter)
     @printf("MA57 - Factorize: %.6f ms, Solve: %.6f ms\n", std(ma57_factor_times) * 1000, std(ma57_solve_times) * 1000)
     @printf("Cholesky - Factorize: %.6f ms, Solve: %.6f ms\n", std(chol_factor_times) * 1000, std(chol_solve_times) * 1000)
     @printf("LDLᵀ - Factorize: %.6f ms, Solve: %.6f ms\n", std(ldl_factor_times) * 1000, std(ldl_solve_times) * 1000)
+    @printf("CUDSS - Factorize: %.6f ms, Solve: %.6f ms\n", std(cudss_factor_times) * 1000, std(cudss_solve_times) * 1000)
     @printf("CPU - Factorize: %.6f ms, Solve: %.6f ms\n", std(cpu_factor_times) * 1000, std(cpu_solve_times) * 1000)
     @printf("GPU - Factorize: %.6f ms, Solve: %.6f ms\n", std(gpu_factor_times) * 1000, std(gpu_solve_times) * 1000)
     @printf("Sequential - Factorize: %.6f ms, Solve: %.6f ms\n", std(sequential_factor_times) * 1000, std(sequential_solve_times) * 1000)
