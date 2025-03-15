@@ -19,9 +19,7 @@ import CUDA.CUSOLVER: potrfBatched!
 
 # Export functions
 export mynorm
-# export cholesky_factorize!, cholesky_solve!
 export initialize, factorize!, solve!
-export initialize_sequential_cholesky_factor, factorize_sequential_cholesky_factor!, solve_sequential_cholesky_factor!
 
 # Include files
 include("myBLAS.jl")

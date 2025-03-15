@@ -1,28 +1,117 @@
-export construct_block_tridiagonal
+using SparseArrays
 
-function construct_block_tridiagonal(A_list, B_list)
-    _, n, N = size(A_list)
-    blocks = Matrix{Float64}[]
+export construct_block_tridiagonal, generate_data, to_gpu
 
-    # Construct the block matrix row-wise
-    for i = 1:N
-        row_blocks = Any[]
-        for j = 1:N
+function generate_data(N::Int, n::Int)
+    # Generate CPU matrices
+    A_list = Vector{Matrix{Float64}}(undef, N)
+    for i in 1:N
+        temp = randn(n, n)
+        A_list[i] = temp * temp' + n * I
+    end
+    
+    B_list = Vector{Matrix{Float64}}(undef, N-1)
+    for i in 1:N-1
+        temp = randn(n, n)
+        B_list[i] = temp
+    end
+    
+    x_list = Vector{Matrix{Float64}}(undef, N)
+    x = Vector{Matrix{Float64}}(undef, N)
+    for i in 1:N
+        x_list[i] = rand(n, 1)
+        x[i] = zeros(n, 1)
+    end
+    
+    d_list = Vector{Matrix{Float64}}(undef, N)
+    d_list[1] = A_list[1] * x_list[1] + B_list[1] * x_list[2]
+    @views for i = 2:N-1
+        d_list[i] = B_list[i-1]' * x_list[i-1] + A_list[i] * x_list[i] + B_list[i] * x_list[i+1]
+    end
+    d_list[N] = B_list[N-1]' * x_list[N-1] + A_list[N] * x_list[N]
+    
+    return A_list, B_list, x_list, x, d_list
+end
+
+
+function to_gpu(A_list, B_list, x_list, x, d_list)
+    # Convert CPU arrays to GPU arrays
+    A_list_gpu = [CuArray(A) for A in A_list]
+    B_list_gpu = [CuArray(B) for B in B_list]
+    x_list_gpu = [CuArray(x) for x in x_list]
+    x_gpu = [CuArray(x) for x in x]
+    d_list_gpu = [CuArray(d) for d in d_list]
+    return A_list_gpu, B_list_gpu, x_list_gpu, x_gpu, d_list_gpu
+end
+
+function construct_block_tridiagonal(A_list, B_list, d_list)
+    N = length(A_list)
+    n = size(A_list[1], 1)
+    total_size = N * n  # Total dimension of the sparse matrix
+
+    I = Int[]
+    J = Int[]
+    V = Float64[]
+
+    # Fill the sparse matrix
+    for i in 1:N
+        row_offset = (i - 1) * n
+        for j in 1:N
+            col_offset = (j - 1) * n
             if i == j
-                push!(row_blocks, A_list[:, :, i])  # Diagonal blocks
+                A = A_list[i]
             elseif j == i + 1
-                push!(row_blocks, B_list[:, :, i])  # Upper diagonal blocks
+                A = B_list[i]
             elseif j == i - 1
-                push!(row_blocks, B_list[:, :, j]')  # Lower diagonal blocks (transpose)
+                A = B_list[j]'
             else
-                push!(row_blocks, zeros(n, n))  # Zero blocks elsewhere
+                continue  # Skip zero blocks
+            end
+
+            # Insert block into sparse matrix
+            for row in 1:n
+                for col in 1:n
+                    push!(I, row_offset + row)
+                    push!(J, col_offset + col)
+                    push!(V, A[row, col])
+                end
             end
         end
-        push!(blocks, hcat(row_blocks...))
     end
 
-    return vcat(blocks...)
+    # Construct sparse matrix
+    M = sparse(I, J, V, total_size, total_size)
+
+    # Construct right-hand side vector
+    d_vec = vcat(d_list...)
+
+    return M, d_vec
 end
+
+# function construct_block_tridiagonal(A_list, B_list, d_list)
+#     N = length(A_list)
+#     n = size(A_list[1])[1]
+#     blocks = Matrix{Float64}[]
+
+#     # Construct the block matrix row-wise
+#     for i = 1:N
+#         row_blocks = Any[]
+#         for j = 1:N
+#             if i == j
+#                 push!(row_blocks, A_list[i])  # Diagonal blocks
+#             elseif j == i + 1
+#                 push!(row_blocks, B_list[i])  # Upper diagonal blocks
+#             elseif j == i - 1
+#                 push!(row_blocks, B_list[j]')  # Lower diagonal blocks (transpose)
+#             else
+#                 push!(row_blocks, zeros(n, n))  # Zero blocks elsewhere
+#             end
+#         end
+#         push!(blocks, hcat(row_blocks...))
+#     end
+    
+#     return vcat(blocks...), vcat(d_list...)
+# end
 
 function generate_tridiagonal_system(N::Int, n::Int)  #TODO make the whole matrix positive definite
     # Generate A_list (diagonal block matrices)

@@ -1,4 +1,5 @@
 using LinearAlgebra, SparseArrays, BlockArrays, SuiteSparse
+using CUDA
 using Random
 using LDLFactorizations
 using HSL
@@ -19,17 +20,68 @@ level = 4; # number of nested level
 N_last = P_last * (m + 1) - m; # number of diagonal blocks
 seed = 42 # random seed for reproducibility
 
-function benchmark_factorization_and_solve(N_last, n, m, P_last, level, iter, seed)
-    # Set random seed
-    Random.seed!(seed)
-    
-    N = N_last;
-    P = P_last;
-
+function run(m, n, P_start, level)
+    # Calculate N based on levels
+    P = P_start
+    N = P * (m + 1) - m
     for i = 2:level
-        P = N;
-        N = P * (m + 1) - m;
+        P = N
+        N = P * (m + 1) - m
     end
+    
+    A_list, B_list, x_list, x, d_list = generate_data(N, n)
+    A_list_gpu, B_list_gpu, x_list_gpu, x_gpu, d_list_gpu = to_gpu(A_list, B_list, x_list, x, d_list)
+    BigMatrix, d = construct_block_tridiagonal(A_list, B_list, d_list)
+
+    BigMatrix_57 = Ma57(BigMatrix)
+    ma57_factorize_time = @elapsed ma57_factorize!(BigMatrix_57)
+    ma57_solve_time = @elapsed ma57_solve(BigMatrix_57, d)
+
+    BigMatrix_57 = nothing
+
+    # Warmup Cholesky
+    chol_factor_time = @elapsed F = cholesky(BigMatrix)
+    chol_solve_time = @elapsed F \ d
+
+    F = nothing
+
+    # Warmup LDLᵀ
+    ldl_factor_time = @elapsed LDLT = ldl(BigMatrix; P=Vector(1:N*n))
+    ldl_solve_time = @elapsed LDLT \ d
+
+    LDLT = nothing
+
+    # Warmup factorization
+    data = initialize(P_start * (m + 1) - m, m, n, P_start, A_list, B_list, level)
+    data_gpu = initialize(P_start * (m + 1) - m, m, n, P_start, A_list_gpu, B_list_gpu, level)
+    data_sequential = initialize(N, n, A_list, B_list)
+    cpu_factorize_time = @elapsed factorize!(data)
+    cpu_solve_time = @elapsed solve!(data, d_list, x)
+    gpu_factorize_time = @elapsed factorize!(data_gpu)
+    gpu_solve_time = @elapsed solve!(data_gpu, d_list_gpu, x_gpu)
+    sequential_factorize_time = @elapsed factorize!(data_sequential)
+    sequential_solve_time = @elapsed solve!(data_sequential, d_list, x)
+    
+    GC.gc()
+    CUDA.reclaim()
+
+    results = [ma57_factorize_time, 
+    ma57_solve_time, 
+    chol_factor_time, 
+    chol_solve_time, 
+    ldl_factor_time, 
+    ldl_solve_time, 
+    cpu_factorize_time, 
+    cpu_solve_time, 
+    gpu_factorize_time, 
+    gpu_solve_time, 
+    sequential_factorize_time, 
+    sequential_solve_time]
+    
+    return results
+end
+
+function benchmark_factorization_and_solve(iter)
 
     # Storage for times
     ma57_factor_times = Float64[]
@@ -41,122 +93,72 @@ function benchmark_factorization_and_solve(N_last, n, m, P_last, level, iter, se
     ldl_factor_times = Float64[]
     ldl_solve_times = Float64[]
 
-    our_factor_times = Float64[]
-    our_solve_times = Float64[]
+    cpu_factor_times = Float64[]
+    cpu_solve_times = Float64[]
 
-    our_factor_times_3 = Float64[]
-    our_solve_times_3 = Float64[]
+    gpu_factor_times = Float64[]
+    gpu_solve_times = Float64[]
 
-    # Warmup run to trigger compilation
-    println("Performing warmup runs...")
-    BigMatrix_warmup, d_warmup, x_true_warmup, A_list_warmup, B_list_warmup = generate_tridiagonal_system(N, n)
-    
-    # Warmup MA57
-    BigMatrix_57_warmup = Ma57(BigMatrix_warmup)
-    ma57_factorize!(BigMatrix_57_warmup)
-    ma57_solve(BigMatrix_57_warmup, d_warmup)
-    
-    # Warmup Cholesky
-    BigMatrix_sparse_warmup = SparseMatrixCSC(BigMatrix_warmup)
-    F_warmup = cholesky(BigMatrix_sparse_warmup)
-    F_warmup \ d_warmup
-    
-    # Warmup LDLᵀ
-    LDLT_warmup = ldl(BigMatrix_warmup; P=Vector(1:N*n))
-    LDLT_warmup \ d_warmup
-    
-    # Warmup our solvers
-    data_warmup = initialize(N_last, m, n, P_last, A_list_warmup, B_list_warmup, level)
-    factorize!(data_warmup)
-    x_warmup = zeros(data_warmup.N * n)
-    solve!(data_warmup, d_warmup, x_warmup)
+    sequential_factor_times = Float64[]
+    sequential_solve_times = Float64[]
 
-    data_warmup_3 = initialize_sequential_cholesky_factor(N, n, A_list_warmup, B_list_warmup)
-    factorize_sequential_cholesky_factor!(data_warmup_3)
-    x_warmup_3 = zeros(data_warmup_3.N * n)
-    solve_sequential_cholesky_factor!(data_warmup_3, d_warmup, x_warmup_3)
-    
-    println("Starting actual benchmark...")
-    
+    println("Starting warmup...")
+
+    results = run(2, 10, 3, 3)
+
+    (m, n, P_start, level) = (4, 200, 3, 5) #(4, 200, 3, 4)
+
+    P = P_start
+    N = P * (m + 1) - m
+    for i = 2:level
+        P = N
+        N = P * (m + 1) - m
+    end
+
+    println("Starting benchmark...")
+
     for i = tqdm(1:iter)
-        # Generate problem instance
-        BigMatrix, d, x_true, A_list, B_list = generate_tridiagonal_system(N, n)
 
-        #################################################
-        # **Method 1: MA57 Solver**
-        #################################################
-        BigMatrix_57 = Ma57(BigMatrix)
+        results = run(m, n, P_start, level)
 
-        ma57_factor_time = @elapsed ma57_factorize!(BigMatrix_57)
-        ma57_solve_time = @elapsed x = ma57_solve(BigMatrix_57, d)
+        push!(ma57_factor_times, results[1])
+        push!(ma57_solve_times, results[2])
 
-        push!(ma57_factor_times, ma57_factor_time)
-        push!(ma57_solve_times, ma57_solve_time)
+        push!(chol_factor_times, results[3])
+        push!(chol_solve_times, results[4])
 
-        #################################################
-        # **Method 2: Cholesky Factorization**
-        #################################################
-        BigMatrix_sparse = SparseMatrixCSC(BigMatrix)
+        push!(ldl_factor_times, results[5])
+        push!(ldl_solve_times, results[6])
 
-        chol_factor_time = @elapsed F = cholesky(BigMatrix_sparse) #TODO initialize
-        chol_solve_time = @elapsed x = F \ d
+        push!(cpu_factor_times, results[7])
+        push!(cpu_solve_times, results[8])
 
-        push!(chol_factor_times, chol_factor_time)
-        push!(chol_solve_times, chol_solve_time)
+        push!(gpu_factor_times, results[9])
+        push!(gpu_solve_times, results[10])
 
-        #################################################
-        # **Method 3: LDLᵀ Factorization**
-        #################################################
-        ldl_factor_time = @elapsed LDLT = ldl(BigMatrix; P=Vector(1:N*n)) #TODO initialize
-        ldl_solve_time = @elapsed x = LDLT \ d
-
-        push!(ldl_factor_times, ldl_factor_time)
-        push!(ldl_solve_times, ldl_solve_time)
-
-        #################################################
-        # **Method 4: Our Solver**
-        #################################################
-        data = initialize(N_last, m, n, P_last, A_list, B_list, level)
-
-        our_factor_time = @elapsed factorize!(data)
-
-        x = zeros(data.N * n)
-        our_solve_time = @elapsed solve!(data, d, x)
-
-        push!(our_factor_times, our_factor_time)
-        push!(our_solve_times, our_solve_time)
-
-        #################################################
-        # **Method 5: Sequential Cholesky Factor**
-        #################################################
-        data3 = initialize_sequential_cholesky_factor(N, n, A_list, B_list)
-
-        our_factor_time_3 = @elapsed factorize_sequential_cholesky_factor!(data3)
-
-        x3 = zeros(data3.N * n)
-        our_solve_time_3 = @elapsed solve_sequential_cholesky_factor!(data3, d, x3)
-
-        push!(our_factor_times_3, our_factor_time_3)
-        push!(our_solve_times_3, our_solve_time_3)
+        push!(sequential_factor_times, results[11])
+        push!(sequential_solve_times, results[12])
     end
 
     # Compute and print the average times
-    println("\nAverage Factorization and Solve Times over ", iter, " Runs:", " N: $N, n: $n, P: $P, m: $m, level: $level, seed: $seed")
+    println("\nAverage Factorization and Solve Times over ", iter, " Runs:", " N: $N, n: $n, P: $P, m: $m, level: $level")
     println("---------------------------------------------------")
     @printf("MA57 - Factorize: %.6f ms, Solve: %.6f ms\n", mean(ma57_factor_times) * 1000, mean(ma57_solve_times) * 1000)
     @printf("Cholesky - Factorize: %.6f ms, Solve: %.6f ms\n", mean(chol_factor_times) * 1000, mean(chol_solve_times) * 1000)
     @printf("LDLᵀ - Factorize: %.6f ms, Solve: %.6f ms\n", mean(ldl_factor_times) * 1000, mean(ldl_solve_times) * 1000)
-    @printf("Ours - Factorize: %.6f ms, Solve: %.6f ms\n", mean(our_factor_times) * 1000, mean(our_solve_times) * 1000)
-    @printf("Ours (Sequential) - Factorize: %.6f ms, Solve: %.6f ms\n", mean(our_factor_times_3) * 1000, mean(our_solve_times_3) * 1000)
+    @printf("CPU - Factorize: %.6f ms, Solve: %.6f ms\n", mean(cpu_factor_times) * 1000, mean(cpu_solve_times) * 1000)
+    @printf("GPU - Factorize: %.6f ms, Solve: %.6f ms\n", mean(gpu_factor_times) * 1000, mean(gpu_solve_times) * 1000)
+    @printf("Sequential - Factorize: %.6f ms, Solve: %.6f ms\n", mean(sequential_factor_times) * 1000, mean(sequential_solve_times) * 1000)
     # Also print standard deviations
     println("\nStandard Deviations:")
     println("---------------------------------------------------")
     @printf("MA57 - Factorize: %.6f ms, Solve: %.6f ms\n", std(ma57_factor_times) * 1000, std(ma57_solve_times) * 1000)
     @printf("Cholesky - Factorize: %.6f ms, Solve: %.6f ms\n", std(chol_factor_times) * 1000, std(chol_solve_times) * 1000)
     @printf("LDLᵀ - Factorize: %.6f ms, Solve: %.6f ms\n", std(ldl_factor_times) * 1000, std(ldl_solve_times) * 1000)
-    @printf("Ours - Factorize: %.6f ms, Solve: %.6f ms\n", std(our_factor_times) * 1000, std(our_solve_times) * 1000)
-    @printf("Ours (Sequential) - Factorize: %.6f ms, Solve: %.6f ms\n", std(our_factor_times_3) * 1000, std(our_solve_times_3) * 1000)
+    @printf("CPU - Factorize: %.6f ms, Solve: %.6f ms\n", std(cpu_factor_times) * 1000, std(cpu_solve_times) * 1000)
+    @printf("GPU - Factorize: %.6f ms, Solve: %.6f ms\n", std(gpu_factor_times) * 1000, std(gpu_solve_times) * 1000)
+    @printf("Sequential - Factorize: %.6f ms, Solve: %.6f ms\n", std(sequential_factor_times) * 1000, std(sequential_solve_times) * 1000)
 end
 
 # Run benchmark with warmup
-benchmark_factorization_and_solve(N_last, n, m, P_last, level, 100, seed)
+benchmark_factorization_and_solve(10)

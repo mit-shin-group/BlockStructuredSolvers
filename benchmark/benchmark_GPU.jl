@@ -7,47 +7,7 @@ using Printf
 using Random
 using ProgressBars
 
-function generate_data(N::Int, n::Int)
-    # Generate CPU matrices
-    A_list = Vector{Matrix{Float64}}(undef, N)
-    for i in 1:N
-        temp = randn(n, n)
-        A_list[i] = temp * temp' + n * I
-    end
-    
-    B_list = Vector{Matrix{Float64}}(undef, N-1)
-    for i in 1:N-1
-        temp = randn(n, n)
-        B_list[i] = temp
-    end
-    
-    x_list = Vector{Matrix{Float64}}(undef, N)
-    x = Vector{Matrix{Float64}}(undef, N)
-    for i in 1:N
-        x_list[i] = rand(n, 1)
-        x[i] = zeros(n, 1)
-    end
-    
-    d_list = Vector{Matrix{Float64}}(undef, N)
-    d_list[1] = A_list[1] * x_list[1] + B_list[1] * x_list[2]
-    @views for i = 2:N-1
-        d_list[i] = B_list[i-1]' * x_list[i-1] + A_list[i] * x_list[i] + B_list[i] * x_list[i+1]
-    end
-    d_list[N] = B_list[N-1]' * x_list[N-1] + A_list[N] * x_list[N]
-    
-    return A_list, B_list, x_list, x, d_list
-end
-
-
-function to_gpu(A_list, B_list, x_list, x, d_list)
-    # Convert CPU arrays to GPU arrays
-    A_list_gpu = [CuArray(A) for A in A_list]
-    B_list_gpu = [CuArray(B) for B in B_list]
-    x_list_gpu = [CuArray(x) for x in x_list]
-    x_gpu = [CuArray(x) for x in x]
-    d_list_gpu = [CuArray(d) for d in d_list]
-    return A_list_gpu, B_list_gpu, x_list_gpu, x_gpu, d_list_gpu
-end
+include("utils.jl")
 
 function run(m, n, P_start, level)
     # Calculate N based on levels

@@ -10,7 +10,7 @@ struct BlockTriDiagData_sequential_cholesky_factor{
 
 end
 
-function initialize_sequential_cholesky_factor(N, n, A_list, B_list)
+function initialize(N, n, A_list, B_list)
 
     data = BlockTriDiagData_sequential_cholesky_factor(
         N,
@@ -23,7 +23,7 @@ function initialize_sequential_cholesky_factor(N, n, A_list, B_list)
 
 end
 
-function factorize_sequential_cholesky_factor!(
+function factorize!(
     data::BlockTriDiagData_sequential_cholesky_factor
 )
 
@@ -36,7 +36,7 @@ cholesky_factorize!(A_list, B_list, N)
 
 end
 
-function solve_sequential_cholesky_factor!(data::BlockTriDiagData_sequential_cholesky_factor, d_list, x)
+function solve!(data::BlockTriDiagData_sequential_cholesky_factor, d_list, x)
 
     N = data.N
     A_list = data.A_list

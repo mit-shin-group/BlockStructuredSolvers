@@ -37,14 +37,14 @@
 
         ϵ = sqrt(eps(eltype(A_list[1])));
 
-        data = initialize_sequential_cholesky_factor(N, n, A_list, B_list);
+        data = initialize(N, n, A_list, B_list);
 
         GC.gc()
         println("  Factorization:")
-        @time factorize_sequential_cholesky_factor!(data)
+        @time factorize!(data)
         
         println("  Solve:")
-        @time solve_sequential_cholesky_factor!(data, d_list, x)
+        @time solve!(data, d_list, x)
 
         @test mynorm(x - x_list) ≤ ϵ * mynorm(d_list)
     end
@@ -89,14 +89,14 @@ end
 
         ϵ = sqrt(eps(eltype(A_list[1])));
 
-        data = initialize_sequential_cholesky_factor(N, n, A_list, B_list);
+        data = initialize(N, n, A_list, B_list);
 
         GC.gc()
         println("  Factorization:")
-        @time factorize_sequential_cholesky_factor!(data)
+        @time factorize!(data)
         
         println("  Solve:")
-        @time solve_sequential_cholesky_factor!(data, d_list, x)
+        @time solve!(data, d_list, x)
 
         @test mynorm(x - x_list) ≤ ϵ * mynorm(d_list)
     end
