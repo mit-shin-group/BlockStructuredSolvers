@@ -5,11 +5,12 @@ on:
     branches:
       - main
       - beat_baseline
+      - vector_representation
   pull_request:
     branches:
       - main
       - beat_baseline
-
+      - vector_representation
 jobs:
   test:
     runs-on: ${{ matrix.os }}

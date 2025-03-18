@@ -54,8 +54,16 @@ function run(m, n, P_start, level)
 
     BigMatrix_cudss = CUSPARSE.CuSparseMatrixCSR(BigMatrix)
     d_cudss = CuArray(d)
-    cudss_factor_time = @elapsed chol = CUDSS.cholesky(BigMatrix_cudss; check=false)
-    cudss_solve_time = @elapsed chol \ d_cudss
+    start_time = time()
+    chol = CUDSS.cholesky(BigMatrix_cudss; check=false)
+    CUDA.synchronize()
+    cudss_factor_time = time() - start_time
+    
+    # Time CUDSS solve using events
+    start_time = time()
+    chol \ d_cudss
+    CUDA.synchronize()
+    cudss_solve_time = time() - start_time
 
     BigMatrix_cudss = nothing
     chol = nothing
@@ -66,8 +74,8 @@ function run(m, n, P_start, level)
     data_sequential = initialize(N, n, A_list, B_list)
     cpu_factorize_time = @elapsed factorize!(data)
     cpu_solve_time = @elapsed solve!(data, d_list, x)
-    gpu_factorize_time = @elapsed factorize!(data_gpu)
-    gpu_solve_time = @elapsed solve!(data_gpu, d_list_gpu, x_gpu)
+    gpu_factorize_time = @elapsed CUDA.@sync factorize!(data_gpu)
+    gpu_solve_time = @elapsed CUDA.@sync solve!(data_gpu, d_list_gpu, x_gpu)
     sequential_factorize_time = @elapsed factorize!(data_sequential)
     sequential_solve_time = @elapsed solve!(data_sequential, d_list, x)
     
@@ -120,7 +128,7 @@ function benchmark_factorization_and_solve(iter)
 
     _ = run(2, 10, 3, 3)
 
-    (m, n, P_start, level) = (4, 200, 3, 4) #(4, 200, 3, 4)
+    (m, n, P_start, level) = (3, 200, 3, 5) #(4, 200, 3, 4)
 
     P = P_start
     N = P * (m + 1) - m
