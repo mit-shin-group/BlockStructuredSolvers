@@ -24,7 +24,7 @@ jobs:
       - name: Set up Julia
         uses: julia-actions/setup-julia@v2
         with:
-          version: '1.9'  # Use the latest stable Julia version
+          version: '1.11'  # Use the latest stable Julia version
 
       - name: Cache Julia artifacts
         uses: actions/cache@v3
