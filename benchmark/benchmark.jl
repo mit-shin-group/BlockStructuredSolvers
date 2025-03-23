@@ -35,8 +35,9 @@ function run(m, n, P_start, level)
     BigMatrix, d = construct_block_tridiagonal(A_list, B_list, d_list)
 
     BigMatrix_57 = Ma57(BigMatrix)
+    d_57 = deepcopy(d)
     ma57_factorize_time = @elapsed ma57_factorize!(BigMatrix_57)
-    ma57_solve_time = @elapsed ma57_solve(BigMatrix_57, d)
+    ma57_solve_time = @elapsed ma57_solve(BigMatrix_57, d_57)
 
     BigMatrix_57 = nothing
 
@@ -60,8 +61,10 @@ function run(m, n, P_start, level)
     cudss_factor_time = time() - start_time
     
     # Time CUDSS solve using events
+    x_cudss = deepcopy(d_cudss)
     start_time = time()
-    chol \ d_cudss
+    cudss("solve", chol, x_cudss, d_cudss)
+    mynorm(x_cudss - d_57) #TODO: not working
     CUDA.synchronize()
     cudss_solve_time = time() - start_time
 
@@ -128,7 +131,7 @@ function benchmark_factorization_and_solve(iter)
 
     _ = run(2, 10, 3, 3)
 
-    (m, n, P_start, level) = (3, 200, 3, 5) #(4, 200, 3, 4)
+    (m, n, P_start, level) = (3, 100, 3, 4) #(4, 200, 3, 4)
 
     P = P_start
     N = P * (m + 1) - m

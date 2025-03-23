@@ -5,6 +5,7 @@ import LinearAlgebra.BLAS: gemm! as lagemm!
 import LinearAlgebra.BLAS: trsm! as latrsm!
 import LinearAlgebra.LAPACK: potrf! as lapotrf!
 import LinearAlgebra: norm as lanorm
+import LinearAlgebra: I
 
 # GPU BLAS/LAPACK operations
 import CUDA.CUBLAS: gemm! as cugemm!
@@ -17,14 +18,18 @@ import CUDA: StridedCuMatrix, CuMatrix, CuArray
 import CUDA.CUBLAS: gemm_batched!, trsm_batched! 
 import CUDA.CUSOLVER: potrfBatched!
 
+using SparseArrays
+
 # Export functions
 export mynorm
 export initialize, factorize!, solve!
+export construct_block_tridiagonal, generate_data, detect_block_tridiagonal
 
 # Include files
 include("myBLAS.jl")
 include("backbone.jl")
 include("block_cholesky_factor_solve.jl")
 include("sequential_cholesky_factor_solve.jl")
+include("interface.jl")
 
 end
