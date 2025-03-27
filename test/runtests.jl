@@ -3,7 +3,7 @@ using BlockStructuredSolvers
 import LinearAlgebra: I
 using SparseArrays
 
-import CUDA: CuMatrix, DeviceMemory
+import CUDA
 
 # Set random seed for deterministic tests
 using Random
