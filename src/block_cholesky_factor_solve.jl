@@ -115,7 +115,7 @@ function factorize!(data::BlockTriDiagData)
     LHS_A_list .+= A_list[I_separator]
 
     # Main factorization loop
-    func1!(A_list, B_list, LHS_A_list, LHS_B_list, temp_B_list, factor_list, factor_list_temp, M_2n_list, I_separator, P, m, n)
+    compute_schur_complement!(A_list, B_list, LHS_A_list, LHS_B_list, temp_B_list, factor_list, factor_list_temp, M_2n_list, I_separator, P, m, n)
 
     # Recursive factorization
     if isnothing(data.NextData)
@@ -141,7 +141,7 @@ function solve!(data::BlockTriDiagData, d_list, x)
     d_list_non_separator = view(d_list, I_non_separator)
 
     # Compute RHS from Schur complement
-    func2!(data.factor_list, d_list_non_separator, data.temp_list, RHS, P, m, n)
+    compute_schur_rhs!(data.factor_list, d_list_non_separator, data.temp_list, RHS, P, m, n)
 
     # Solve system
     if isnothing(data.NextData)
@@ -152,10 +152,10 @@ function solve!(data::BlockTriDiagData, d_list, x)
     end
 
     # Update d after Schur solve
-    func3!(data.temp_B_list, x, d_list, I_separator, P)
+    update_boundary_solution!(data.temp_B_list, x, d_list, I_separator, P)
 
     # Solve for non-separators
-    func4!(data.A_list, data.B_list, d_list_non_separator, I_separator, P, m)
+    solve_non_separator_blocks!(data.A_list, data.B_list, d_list_non_separator, I_separator, P, m)
 
     copy_vector_of_arrays!(view(x, I_non_separator), d_list_non_separator)
 

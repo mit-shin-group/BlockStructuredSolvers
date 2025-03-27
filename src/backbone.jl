@@ -72,7 +72,7 @@ function copy_vector_of_arrays!(dest::AbstractVector{<:AbstractArray}, src::Abst
     end
 end
 
-function func1!(A_list::Vector{<:AbstractMatrix}, B_list::Vector{<:AbstractMatrix}, LHS_A_list, LHS_B_list, temp_B_list, factor_list, factor_list_temp, M_2n_list, I_separator, P, m, n)
+function compute_schur_complement!(A_list::Vector{<:AbstractMatrix}, B_list::Vector{<:AbstractMatrix}, LHS_A_list, LHS_B_list, temp_B_list, factor_list, factor_list_temp, M_2n_list, I_separator, P, m, n)
 
     @inbounds for i = 1:P-1
 
@@ -105,7 +105,7 @@ function func1!(A_list::Vector{<:AbstractMatrix}, B_list::Vector{<:AbstractMatri
 
 end
 
-function func1!(A_list::Vector{<:CuMatrix}, B_list::Vector{<:CuMatrix}, LHS_A_list, LHS_B_list, temp_B_list, factor_list, factor_list_temp, M_2n_list, I_separator, P, m, n)
+function compute_schur_complement!(A_list::Vector{<:CuMatrix}, B_list::Vector{<:CuMatrix}, LHS_A_list, LHS_B_list, temp_B_list, factor_list, factor_list_temp, M_2n_list, I_separator, P, m, n)
            
     # Perform Cholesky factorization
     cholesky_factorize_batched!(A_list, B_list, I_separator, P, m)
@@ -137,7 +137,7 @@ function func1!(A_list::Vector{<:CuMatrix}, B_list::Vector{<:CuMatrix}, LHS_A_li
 
 end
 
-function func2!(factor_list::Vector{<:AbstractMatrix}, d_list_non_separator, temp_list, RHS, P, m, n)
+function compute_schur_rhs!(factor_list::Vector{<:AbstractMatrix}, d_list_non_separator, temp_list, RHS, P, m, n)
 
     for i = 1:P-1
         for j = 1:m
@@ -149,7 +149,7 @@ function func2!(factor_list::Vector{<:AbstractMatrix}, d_list_non_separator, tem
 
 end
 
-function func2!(factor_list::Vector{<:CuMatrix}, d_list_non_separator, temp_list, RHS, P, m, n)
+function compute_schur_rhs!(factor_list::Vector{<:CuMatrix}, d_list_non_separator, temp_list, RHS, P, m, n)
 
     for i = 1:m
         gemm_batched!('T', 'N', -1.0, factor_list[i:m:end], d_list_non_separator[i:m:end], 1.0, temp_list)
@@ -161,7 +161,7 @@ function func2!(factor_list::Vector{<:CuMatrix}, d_list_non_separator, temp_list
     end
 end
 
-function func3!(temp_B_list::Vector{<:AbstractMatrix}, x, d_list, I_separator, P)
+function update_boundary_solution!(temp_B_list::Vector{<:AbstractMatrix}, x, d_list, I_separator, P)
 
     @inbounds for j = 1:P-1
         mygemm!('T', 'N', -1.0, temp_B_list[2*(j-1)+1], x[I_separator[j]], 1.0, d_list[I_separator[j]+1])
@@ -170,14 +170,14 @@ function func3!(temp_B_list::Vector{<:AbstractMatrix}, x, d_list, I_separator, P
 
 end
 
-function func3!(temp_B_list::Vector{<:CuMatrix}, x, d_list, I_separator, P)
+function update_boundary_solution!(temp_B_list::Vector{<:CuMatrix}, x, d_list, I_separator, P)
 
     gemm_batched!('T', 'N', -1.0, temp_B_list[1:2:end], x[I_separator[1:P-1]], 1.0, d_list[I_separator[1:P-1].+1])
     gemm_batched!('N', 'N', -1.0, temp_B_list[2:2:end], x[I_separator[2:P]], 1.0, d_list[I_separator[2:P].-1])
 
 end
 
-function func4!(A_list::Vector{<:AbstractMatrix}, B_list::Vector{<:AbstractMatrix}, d_list, I_separator, P, m)
+function solve_non_separator_blocks!(A_list::Vector{<:AbstractMatrix}, B_list::Vector{<:AbstractMatrix}, d_list, I_separator, P, m)
 
     for i = 1:P-1
         cholesky_solve!(A_list[I_separator[i]+1:I_separator[i]+m], B_list[I_separator[i]+1:I_separator[i]+m-1], d_list[(i-1)*m+1:i*m], m)
@@ -185,7 +185,7 @@ function func4!(A_list::Vector{<:AbstractMatrix}, B_list::Vector{<:AbstractMatri
 
 end
 
-function func4!(A_list::Vector{<:CuMatrix}, B_list::Vector{<:CuMatrix}, d_list, I_separator, P, m)
+function solve_non_separator_blocks!(A_list::Vector{<:CuMatrix}, B_list::Vector{<:CuMatrix}, d_list, I_separator, P, m)
 
     cholesky_solve_batched!(A_list, B_list, d_list, I_separator, P, m)
 
