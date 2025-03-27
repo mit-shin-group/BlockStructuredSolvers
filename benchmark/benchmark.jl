@@ -129,7 +129,7 @@ function benchmark_factorization_and_solve(iter)
 
     _ = run(2, 10, 3, 1)
 
-    (m, n, P_start, level) = (33, 128, 33, 1) #(4, 200, 3, 4)
+    (m, n, P_start, level) = (3, 1024, 32, 1) #(4, 200, 3, 4)
 
     P = P_start
     N = P * (m + 1) - m
