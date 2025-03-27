@@ -3,7 +3,7 @@ using BlockStructuredSolvers
 import LinearAlgebra: I
 using SparseArrays
 
-import CUDA
+import CUDA: CuMatrix, DeviceMemory, functional
 
 # Set random seed for deterministic tests
 using Random
@@ -13,7 +13,7 @@ Random.seed!(42)
 const RUN_CUDA_TESTS = "cuda=true" in ARGS
 
 # Skip CUDA tests if not supported or if explicitly disabled
-if RUN_CUDA_TESTS && !CUDA.functional()
+if RUN_CUDA_TESTS && !functional()
     @warn "CUDA is requested for testing but not functional on this system. CUDA tests will be skipped."
     cuda_enabled = false
 else
