@@ -1,9 +1,6 @@
-mutable struct BlockStructuredData{ #TODO create initialize function
+struct BlockTriDiagData{
     T, 
-    MR <: AbstractArray{T, 4},
-    MT <: AbstractArray{T, 3},
-    MS <: AbstractArray{T, 2},
-    MU <: AbstractArray{T, 1}
+    MT <: Vector{<:AbstractMatrix{T}}
     }
 
     N::Int
@@ -12,6 +9,7 @@ mutable struct BlockStructuredData{ #TODO create initialize function
     P::Int
 
     I_separator::StepRange{Int64, Int64}
+    I_non_separator::Vector{Int}
 
     A_list::MT
     B_list::MT
@@ -20,467 +18,146 @@ mutable struct BlockStructuredData{ #TODO create initialize function
     LHS_B_list::MT
 
     factor_list::MT
+    temp_list::MT
+    temp_B_list::MT
 
-    RHS::MU
+    RHS::MT
 
-    MA_chol_A_list::MR
-    MA_chol_B_list::MR
-    LHS_chol_A_list::MT
-    LHS_chol_B_list::MT
+    M_2n_list::MT
+    factor_list_temp::MT
 
-    M_n_1::MS
-    M_n_2::MS
-    M_2n::MS
-    M_n_2n_1::MS
-    M_n_2n_2::MS
-    M_mn_2n_1::MS
-    M_mn_2n_2::MS
-    U_n::UpperTriangular{T, MS}
-    U_mn::UpperTriangular{T, MS}
-
-    v_n_1::MU
-    v_n_2::MU
-
-    NextData::Union{BlockStructuredData, Nothing}
-
-    next_idx::Vector{Int}
-    next_x::MU
+    NextData::Union{BlockTriDiagData, Nothing}
 
 end
 
-function initialize(N, m, n, P, A_list, B_list, level)
+function initialize(N, m, n, P, A_list_final, B_list_final, level)
 
-    I_separator = 1:(m+1):N
-
-    LHS_A_list = zeros(P, n, n);
-    LHS_B_list = zeros(P-1, n, n);
-
-    MA_list = zeros(P-1, m*n, m*n);
-
-    RHS = zeros(P * n);
-
-    MA_chol_A_list = zeros(P-1, m, n, n);
-    MA_chol_B_list = zeros(P-1, m-1, n, n);
-
-    LHS_chol_A_list = zeros(P, n, n);
-    LHS_chol_B_list = zeros(P-1, n, n);
-
-    factor_list = zeros(P-1, m*n, 2*n);
-
-    M_n_1 = similar(A_list, n, n);
-    M_n_2 = similar(A_list, n, n);
-    U_mn = UpperTriangular(zeros(m*n, m*n));
-
-    M_2n = similar(A_list, 2*n, 2*n);
-    M_n_2n_1 = zeros(n, 2*n);
-    M_n_2n_2 = zeros(n, 2*n);
-    M_mn_2n_1 = zeros(m*n, 2*n);
-    M_mn_2n_2 = zeros(m*n, 2*n);
-
-    U_n = UpperTriangular(zeros(n, n));
-
-    v_n_1 = zeros(n);
-    v_n_2 = zeros(n);
-
-    next_idx = Int[]
-
-    for j = I_separator
-
-        append!(next_idx, (j-1)*n+1:j*n)
-        
-    end
-
-    next_x = zeros(P*n);
-
-    data = BlockStructuredData(
-        N, 
-        m, 
-        n, 
-        P, 
-        I_separator, 
-        A_list, 
-        B_list,
-        LHS_A_list,
-        LHS_B_list,
-        factor_list,
-        RHS,
-        MA_chol_A_list,
-        MA_chol_B_list,
-        LHS_chol_A_list,
-        LHS_chol_B_list,
-        M_n_1,
-        M_n_2,
-        M_2n,
-        M_n_2n_1,
-        M_n_2n_2,
-        M_mn_2n_1,
-        M_mn_2n_2,
-        U_n,
-        U_mn,
-        v_n_1,
-        v_n_2,
-        nothing,
-        next_idx,
-        next_x
-    );
-
-    prev_data = data;
-
-    for i = 2:level
-
-        N = P;
-        m = 2;
-        P = Int((N + m) / (m+1));
+    data = nothing;
+    T = typeof(A_list_final[1]);
+    
+    for i = 1:level
 
         I_separator = 1:(m+1):N
+        I_non_separator = setdiff(1:N, I_separator)
 
-        LHS_A_list = zeros(P, n, n);
-        LHS_B_list = zeros(P-1, n, n);
-
-        RHS = zeros(P * n);
-
-        MA_chol_A_list = zeros(P-1, m, n, n);
-        MA_chol_B_list = zeros(P-1, m-1, n, n);
-    
-        LHS_chol_A_list = zeros(P, n, n);
-        LHS_chol_B_list = zeros(P-1, n, n);
-
-        factor_list = zeros(P-1, m*n, 2*n);
-
-        M_n_1 = similar(A_list, n, n);
-        M_n_2 = similar(A_list, n, n);
-        U_mn = UpperTriangular(zeros(m*n, m*n));
-
-        M_2n = similar(A_list, 2*n, 2*n);
-        M_n_2n_1 = zeros(n, 2*n);
-        M_n_2n_2 = zeros(n, 2*n);
-        M_mn_2n_1 = zeros(m*n, 2*n);
-        M_mn_2n_2 = zeros(m*n, 2*n);
-
-        U_n = UpperTriangular(zeros(n, n));
-
-        v_n_1 = zeros(n);
-        v_n_2 = zeros(n);
-
-        next_idx = Int[]
-
-        for j = I_separator
-
-            append!(next_idx, (j-1)*n+1:j*n)
-            
+        # TODO slow?
+        if i == 1
+            LHS_A_list = [zero(similar(A_list_final[1], n, n)) for i in 1:P];
+            LHS_B_list = [zero(similar(B_list_final[1], n, n)) for i in 1:P-1];
+        else
+            LHS_A_list = deepcopy(data.A_list)
+            LHS_B_list = deepcopy(data.B_list)
         end
 
-        next_x = zeros(P*n);
+        RHS = [zero(similar(A_list_final[1], n, 1)) for i in 1:P];
 
-        next_data = BlockStructuredData(
+        factor_list = [similar(A_list_final[1], n, 2*n) for j = 1:m*(P-1)];
+        temp_list = [zero(similar(A_list_final[1], 2*n, 1)) for i = 1:P-1];
+        temp_B_list = [similar(A_list_final[1], n, n) for i = 1:2*(P-1)];
+
+        M_2n_list = [zero(similar(A_list_final[1], 2*n, 2*n)) for i in 1:P-1];
+        factor_list_temp = [zero(similar(A_list_final[1], n, 2*n)) for i in 1:m*(P-1)];
+
+        if i == level
+            A_list = A_list_final
+            B_list = B_list_final
+        else
+            A_list = [zero(similar(A_list_final[1], n, n)) for i in 1:N];
+            B_list = [zero(similar(B_list_final[1], n, n)) for i in 1:N-1];
+        end
+
+        data = BlockTriDiagData(
             N, 
             m, 
             n, 
             P, 
             I_separator,
+            I_non_separator,
             A_list, 
             B_list,
             LHS_A_list,
             LHS_B_list,
             factor_list,
+            temp_list,
+            temp_B_list,
             RHS,
-            MA_chol_A_list,
-            MA_chol_B_list,
-            LHS_chol_A_list,
-            LHS_chol_B_list,
-            M_n_1,
-            M_n_2,
-            M_2n,
-            M_n_2n_1,
-            M_n_2n_2,
-            M_mn_2n_1,
-            M_mn_2n_2,
-            U_n,
-            U_mn,
-            v_n_1,
-            v_n_2,
-            nothing,
-            next_idx,
-            next_x,
+            M_2n_list,
+            factor_list_temp,
+            data
             );
 
-        prev_data.NextData = next_data;
-        prev_data = next_data;
+        P = N;
+        N = P * (m + 1) - m;
+
     end
 
     return data
 
 end
 
+function factorize!(data::BlockTriDiagData)
+    P = data.P
+    n = data.n
+    m = data.m
+    I_separator = data.I_separator
+    A_list = data.A_list
+    B_list = data.B_list
+    LHS_A_list = data.LHS_A_list
+    LHS_B_list = data.LHS_B_list
+    factor_list = data.factor_list
+    M_2n_list = data.M_2n_list
+    factor_list_temp = data.factor_list_temp
+    temp_B_list = data.temp_B_list
 
-function cholesky_factorize(A_list, B_list, M_chol_A_list, M_chol_B_list, A, B, U, N, n)
+    # Copy data for factorization
+    temp_B_list[1:2:end] .= B_list[I_separator[1:P-1]]
+    temp_B_list[2:2:end] .= B_list[I_separator[2:P].-1]
+    LHS_A_list .+= A_list[I_separator]
 
-    copyto!(A, view(A_list, 1, :, :))
-    cholesky!(Hermitian(A))
-    copyto!(U, UpperTriangular(A))
-    copyto!(view(M_chol_A_list, 1, :, :), U.data)
+    # Main factorization loop
+    compute_schur_complement!(A_list, B_list, LHS_A_list, LHS_B_list, temp_B_list, factor_list, factor_list_temp, M_2n_list, I_separator, P, m, n)
 
-    # Iterate over remaining blocks
-    for i = 2:N
-
-        # Solve for L_{i, i-1}
-        copyto!(A, view(B_list, i-1, :, :))
-        ldiv!(B, U', A)
-        copyto!(view(M_chol_B_list, i-1, :, :), B)
-
-        copyto!(A, view(A_list, i, :, :))
-
-        # Compute Schur complement
-        # mul!(A, B', B, -1.0, 1.0)
-        gemm!('T', 'N', -1.0, B, B, 1.0, A)
-        
-        # Compute Cholesky factor for current block
-        cholesky!(Hermitian(A));
-        copyto!(U, UpperTriangular(A));
-        copyto!(view(M_chol_A_list, i, :, :), U.data)
-
+    # Recursive factorization
+    if isnothing(data.NextData)
+        cholesky_factorize!(LHS_A_list, LHS_B_list, P)
+    else
+        copy_vector_of_arrays!(data.NextData.A_list, LHS_A_list)
+        copy_vector_of_arrays!(data.NextData.B_list, LHS_B_list)
+        factorize!(data.NextData)
     end
-
 end
 
-function cholesky_solve(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n)
-    A .= view(M_chol_A_list, 1, :, :);
-    v .= view(d, 1:n)
-
-    trtrs!('U', 'T', 'N', A, v);
-    view(d, 1:n) .= v;
-
-    for i = 2:N
-
-        A .= view(M_chol_B_list, i-1, :, :);
-
-        u .= v
-        v .= view(d, (i-1)*n+1:i*n)
-
-        gemm!('T', 'N', -1.0, A, u, 1.0, v)
-
-        A .= view(M_chol_A_list, i, :, :);
-        trtrs!('U', 'T', 'N', A, v)
-        view(d, (i-1)*n+1:i*n) .= v
-
-    end
-
-    trtrs!('U', 'N', 'N', A, v);
-    view(d, (N-1)*n+1:N*n) .= v;
-
-    for i = N-1:-1:1
-
-        A .= view(M_chol_B_list, i, :, :);
-
-        u .= v
-        v .= view(d, (i-1)*n+1:i*n)
-
-        gemm!('N', 'N', -1.0, A, u, 1.0, v)
-
-        A .= view(M_chol_A_list, i, :, :);
-        trtrs!('U', 'N', 'N', A, v)
-        view(d, (i-1)*n+1:i*n) .= v
-
-    end
-
-end
-
-function cholesky_solve_matrix(M_chol_A_list, M_chol_B_list, d, A, u, v, N, n) #TODO merge two solves
-    A .= view(M_chol_A_list, 1, :, :);
-    v .= view(d, 1:n, :)
-
-    trtrs!('U', 'T', 'N', A, v);
-    view(d, 1:n, :) .= v;
-
-    for i = 2:N
-
-        A .= view(M_chol_B_list, i-1, :, :);
-
-        u .= v
-        v .= view(d, (i-1)*n+1:i*n, :)
-
-        gemm!('T', 'N', -1.0, A, u, 1.0, v)
-
-        A .= view(M_chol_A_list, i, :, :);
-        trtrs!('U', 'T', 'N', A, v)
-        view(d, (i-1)*n+1:i*n, :) .= v
-
-    end
-
-    trtrs!('U', 'N', 'N', A, v);
-    view(d, (N-1)*n+1:N*n, :) .= v;
-
-    for i = N-1:-1:1
-
-        A .= view(M_chol_B_list, i, :, :);
-
-        u .= v
-        v .= view(d, (i-1)*n+1:i*n, :)
-
-        gemm!('N', 'N', -1.0, A, u, 1.0, v)
-
-        A .= view(M_chol_A_list, i, :, :);
-        trtrs!('U', 'N', 'N', A, v)
-        view(d, (i-1)*n+1:i*n, :) .= v
-
-    end
-
-end
-
-function factorize!(
-    data::BlockStructuredData
-)
-
-P = data.P
-n = data.n
-m = data.m
-
-I_separator = data.I_separator
-
-A_list = data.A_list
-B_list = data.B_list
-
-LHS_A_list = data.LHS_A_list
-LHS_B_list = data.LHS_B_list
-
-factor_list = data.factor_list
-
-MA_chol_A_list = data.MA_chol_A_list
-MA_chol_B_list = data.MA_chol_B_list
-
-A = data.M_n_1
-B = data.M_n_2
-M_2n = data.M_2n
-M_mn_2n_1 = data.M_mn_2n_1
-M_mn_2n_2 = data.M_mn_2n_2
-
-U = data.U_n
-u = data.M_n_2n_1
-v = data.M_n_2n_2
-
-@views for i = 1:P-1 #TODO get rid of views
-
-    # Compute inverse of block tridiagonal matrices to compute inverse of MA (top left of Schur complement)
-    cholesky_factorize(
-        A_list[I_separator[i]+1:I_separator[i]+m, :, :], 
-        B_list[I_separator[i]+1:I_separator[i]+m-1, :, :], 
-        MA_chol_A_list[i, :, :, :],
-        MA_chol_B_list[i, :, :, :],
-        A,
-        B,
-        U,
-        m, 
-        n)
-
-    # MA_chol_list[i, :, :] .= MA_chol
-    
-    M_mn_2n_1[1:n, 1:n] .= B_list[I_separator[i], :, :]'
-    M_mn_2n_1[m*n-n+1:m*n, n+1:2*n] .= B_list[I_separator[i+1]-1, :, :]
-
-    M_mn_2n_2 .= M_mn_2n_1
-
-    # ldiv!(MA_chol', M_mn_2n_2)
-    # ldiv!(MA_chol, M_mn_2n_2)
-
-    cholesky_solve_matrix(MA_chol_A_list[i, :, :, :], MA_chol_B_list[i, :, :, :], M_mn_2n_2, A, u, v, m, n)
-
-    factor_list[i, :, :] = M_mn_2n_2
-
-    mul!(M_2n, M_mn_2n_1', M_mn_2n_2)
-
-    LHS_A_list[i, :, :] .-= M_2n[1:n, 1:n]
-    LHS_A_list[i+1, :, :] .-= M_2n[n+1:2*n, n+1:2*n]
-    LHS_B_list[i, :, :] .-= M_2n[1:n, n+1:2*n]
-
-    LHS_A_list[i, :, :] .+= A_list[I_separator[i], :, :]
-
-end
-
-copyto!(A, view(LHS_A_list, P, :, :))
-A .+= view(A_list, I_separator[P], :, :) #TODO how to get rid of .+=
-copyto!(view(LHS_A_list, P, :, :), A)
-
-if isnothing(data.NextData)
-
-    LHS_chol_A_list = data.LHS_chol_A_list
-    LHS_chol_B_list = data.LHS_chol_B_list
-
-    cholesky_factorize(LHS_A_list, LHS_B_list, LHS_chol_A_list, LHS_chol_B_list, A, B, U, P, n)
-
-else
-
-    data.NextData.A_list = LHS_A_list
-    data.NextData.B_list = LHS_B_list
-    factorize!(data.NextData)
-
-end
-
-end
-
-function solve!(data::BlockStructuredData, d, x)
+function solve!(data::BlockTriDiagData, d_list, x)
 
     P = data.P
     n = data.n
     m = data.m
-
     I_separator = data.I_separator
-    B_list = data.B_list
-    MA_chol_A_list = data.MA_chol_A_list
-    MA_chol_B_list = data.MA_chol_B_list
-    factor_list = data.factor_list
-
-    B = data.M_n_2
-    U = data.U_mn
-    M_mn_2n_1 = data.M_mn_2n_1
-
+    I_non_separator = data.I_non_separator
     RHS = data.RHS
-    u = data.v_n_1
-    v = data.v_n_2
 
-    # Assign RHS from d
-    @inbounds for j = 1:P
-        view(RHS, (j-1)*n+1:j*n) .= view(d, I_separator[j]*n-n+1:I_separator[j]*n)
-    end
+    # Copy d_list to RHS
+    copy_vector_of_arrays!(RHS, view(d_list, I_separator))
+    d_list_non_separator = view(d_list, I_non_separator)
 
     # Compute RHS from Schur complement
-    @inbounds for i = 1:P-1
-        M_mn_2n_1 .= view(factor_list, i, :, :)
-        mul!(view(RHS, (i-1)*n+1:(i+1)*n), M_mn_2n_1', view(d, I_separator[i]*n+1:I_separator[i+1]*n-n), -1.0, 1.0)
-    end
+    compute_schur_rhs!(data.factor_list, d_list_non_separator, data.temp_list, RHS, P, m, n)
 
     # Solve system
     if isnothing(data.NextData)
-
-        LHS_chol_A_list = data.LHS_chol_A_list
-        LHS_chol_B_list = data.LHS_chol_B_list
-
-        cholesky_solve(LHS_chol_A_list, LHS_chol_B_list, RHS, B, u, v, P, n)
-
-        # Assign RHS to x for separators
-        @inbounds for i = 1:P
-            view(x, I_separator[i]*n-n+1:I_separator[i]*n) .= view(RHS, (i-1)*n+1:i*n)
-        end
+        cholesky_solve!(data.LHS_A_list, data.LHS_B_list, RHS, P)
+        copy_vector_of_arrays!(view(x, I_separator), RHS)
     else
-        data.next_x .= view(x, data.next_idx)
-        solve!(data.NextData, RHS, data.next_x)
-        view(x, data.next_idx) .= data.next_x
+        solve!(data.NextData, RHS, view(x, I_separator))
     end
 
     # Update d after Schur solve
-    @inbounds for j = 1:P-1
-        B .= view(B_list, I_separator[j], :, :)
-        gemm!('T', 'N', -1.0, B, view(x, I_separator[j]*n-n+1:I_separator[j]*n), 1.0, view(d, I_separator[j]*n+1:I_separator[j]*n+n))
-
-        B .= view(B_list, I_separator[j+1]-1, :, :)
-        mul!(view(d, I_separator[j+1]*n-n-n+1:I_separator[j+1]*n-n), B, view(x, I_separator[j+1]*n-n+1:I_separator[j+1]*n), -1.0, 1.0)
-    end
+    update_boundary_solution!(data.temp_B_list, x, d_list, I_separator, P)
 
     # Solve for non-separators
-    @inbounds for i = 1:P-1
+    solve_non_separator_blocks!(data.A_list, data.B_list, d_list_non_separator, I_separator, P, m)
 
-        cholesky_solve(view(MA_chol_A_list, i, :, :, :), view(MA_chol_B_list, i, :, :, :), view(d, I_separator[i]*n+1:I_separator[i+1]*n-n), B, u, v, m, n)
-        view(x, I_separator[i]*n+1:I_separator[i+1]*n-n) .= view(d, I_separator[i]*n+1:I_separator[i+1]*n-n)
-    end
+    copy_vector_of_arrays!(view(x, I_non_separator), d_list_non_separator)
 
     return nothing
 end

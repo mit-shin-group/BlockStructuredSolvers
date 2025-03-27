@@ -1,3 +1,0 @@
-@testset "CUDA" begin
-    
-end

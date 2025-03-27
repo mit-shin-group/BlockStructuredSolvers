@@ -1,16 +1,6 @@
-@testset "Block cholesky factor" begin
+@testset "Sequential cholesky factor" begin
     n = 100 # size of each block
-    m = 2 # number of blocks between separators
-    P_start = 3 # number of separators
-    level = 3
-
-    # Calculate N based on levels
-    P = P_start
-    N = P * (m + 1) - m
-    for i = 2:level
-        P = N
-        N = P * (m + 1) - m
-    end
+    N = 55 # number of diagonal blocks
 
     # Run 3 times
     for run in 1:3
@@ -47,7 +37,7 @@
 
         ϵ = sqrt(eps(eltype(A_list[1])));
 
-        data = initialize(P_start * (m + 1) - m, m, n, P_start, A_list, B_list, level);
+        data = initialize(N, n, A_list, B_list);
 
         GC.gc()
         println("  Factorization:")
@@ -61,19 +51,9 @@
 end
 
 if @isdefined(cuda_enabled) && cuda_enabled
-    @testset "Block cholesky factor (CUDA)" begin
+    @testset "Sequential cholesky factor (CUDA)" begin
         n = 100 # size of each block
-        m = 2 # number of blocks between separators
-        P_start = 3 # number of separators
-        level = 3
-
-        # Calculate N based on levels
-        P = P_start
-        N = P * (m + 1) - m
-        for i = 2:level
-            P = N
-            N = P * (m + 1) - m
-        end
+        N = 55 # number of diagonal blocks
 
         # Run 3 times
         for run in 1:3
@@ -110,7 +90,7 @@ if @isdefined(cuda_enabled) && cuda_enabled
 
             ϵ = sqrt(eps(eltype(A_list[1])));
 
-            data = initialize(P_start * (m + 1) - m, m, n, P_start, A_list, B_list, level);
+            data = initialize(N, n, A_list, B_list);
 
             GC.gc()
             println("  Factorization:")
@@ -123,5 +103,5 @@ if @isdefined(cuda_enabled) && cuda_enabled
         end
     end
 else
-    @info "Skipping CUDA tests for Block cholesky factor on this platform"
+    @info "Skipping CUDA tests for Sequential cholesky factor on this platform"
 end

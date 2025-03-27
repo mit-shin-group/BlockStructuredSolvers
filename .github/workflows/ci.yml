@@ -1,14 +1,9 @@
 name: CI
 
 on:
-  push:
-    branches:
-      - main
-      - proper_strucutre
   pull_request:
     branches:
       - main
-      - proper_strucutre
 
 jobs:
   test:
@@ -23,7 +18,7 @@ jobs:
       - name: Set up Julia
         uses: julia-actions/setup-julia@v2
         with:
-          version: '1.9'  # Use the latest stable Julia version
+          version: '1.11'
 
       - name: Cache Julia artifacts
         uses: actions/cache@v3
@@ -43,7 +38,16 @@ jobs:
         run: |
           julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
 
+      - name: Check for CUDA availability
+        id: check-cuda
+        shell: bash
+        run: |
+          if command -v nvidia-smi &> /dev/null; then
+            echo "cuda=true" >> $GITHUB_OUTPUT
+          else
+            echo "cuda=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Run tests
         run: |
-          julia --project=. -e 'using Pkg; Pkg.test()'
-
+          julia --project=. -e 'using Pkg; Pkg.test(; test_args=["cuda=${{ steps.check-cuda.outputs.cuda }}"])'

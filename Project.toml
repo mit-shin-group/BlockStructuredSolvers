@@ -1,14 +1,24 @@
 name = "BlockStructuredSolvers"
 uuid = "e294871a-52ed-424c-aac5-512b15cb83b5"
+license = "MIT"
 authors = ["David Jin <jindavid@mit.edu>", "Sungho Shin <sushin@mit.edu>"]
 version = "0.1.0"
-license = "MIT"
 
 [deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+
+[weakdeps]
+MadNLP = "2621e9c9-9eb4-46b1-8089-e8c72242dfb6"
+
+[compat]
+MadNLP = "0.8.5"
+Random = "1.11.0"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [targets]
-test = ["Test"]
+test = ["Test", "Random"]
