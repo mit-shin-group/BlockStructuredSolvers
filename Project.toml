@@ -7,8 +7,10 @@ version = "0.1.0"
 [deps]
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-MadNLP = "2621e9c9-9eb4-46b1-8089-e8c72242dfb6"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+
+[weakdeps]
+MadNLP = "2621e9c9-9eb4-46b1-8089-e8c72242dfb6"
 
 [compat]
 MadNLP = "0.8.5"
