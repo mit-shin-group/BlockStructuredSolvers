@@ -56,7 +56,7 @@
         println("  Solve:")
         @time solve!(data, d_list, x)
 
-        @test mynorm(x - x_list) ≤ ϵ * mynorm(d_list)
+        @test _bss_norm(x - x_list) ≤ ϵ * _bss_norm(d_list)
     end
 end
 
@@ -118,6 +118,6 @@ end
         println("  Solve:")
         @time solve!(data, d_list, x)
 
-        @test mynorm(x - x_list) ≤ ϵ * mynorm(d_list)
+        @test _bss_norm(x - x_list) ≤ ϵ * _bss_norm(d_list)
     end
 end

@@ -72,6 +72,7 @@ function copy_vector_of_arrays!(dest::AbstractVector{<:AbstractArray}, src::Abst
     end
 end
 
+#TODO improve how we compute the Schur complement
 function compute_schur_complement!(A_list::Vector{<:AbstractMatrix}, B_list::Vector{<:AbstractMatrix}, LHS_A_list, LHS_B_list, temp_B_list, factor_list, factor_list_temp, M_2n_list, I_separator, P, m, n)
 
     @inbounds for i = 1:P-1
@@ -80,8 +81,8 @@ function compute_schur_complement!(A_list::Vector{<:AbstractMatrix}, B_list::Vec
         cholesky_factorize!(A_list[I_separator[i]+1:I_separator[i]+m], B_list[I_separator[i]+1:I_separator[i]+m-1], m) #tiny allocation here about 2, belongs to potrf!
 
         # Set up M_n_2n_list_! for Schur complement
-        view(factor_list_temp[(i-1)*m+1], :, 1:n) .= temp_B_list[2*(i-1)+1]'
-        view(factor_list_temp[i*m], :, n+1:2*n) .= temp_B_list[2*i]
+        copyto!(view(factor_list_temp[(i-1)*m+1], :, 1:n), temp_B_list[2*(i-1)+1]')
+        copyto!(view(factor_list_temp[i*m], :, n+1:2*n), temp_B_list[2*i])
     end
 
     # Copy factor_list_temp to M_n_2n_list_2
@@ -112,8 +113,8 @@ function compute_schur_complement!(A_list::Vector{<:CuMatrix}, B_list::Vector{<:
     
     @inbounds for i = 1:P-1
         # Set up M_n_2n_list_! for Schur complement
-        view(factor_list_temp[(i-1)*m+1], :, 1:n) .= temp_B_list[2*(i-1)+1]'
-        view(factor_list_temp[i*m], :, n+1:2*n) .= temp_B_list[2*i]
+        copyto!(view(factor_list_temp[(i-1)*m+1], :, 1:n), temp_B_list[2*(i-1)+1]')
+        copyto!(view(factor_list_temp[i*m], :, n+1:2*n), temp_B_list[2*i])
     end
 
     # Copy factor_list_temp to M_n_2n_list_2

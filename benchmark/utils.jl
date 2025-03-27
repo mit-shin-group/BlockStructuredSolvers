@@ -88,44 +88,33 @@ function construct_block_tridiagonal(A_list, B_list, d_list)
     return M, d_vec
 end
 
-# function construct_block_tridiagonal(A_list, B_list, d_list)
-#     N = length(A_list)
-#     n = size(A_list[1])[1]
-#     blocks = Matrix{Float64}[]
 
-#     # Construct the block matrix row-wise
-#     for i = 1:N
-#         row_blocks = Any[]
-#         for j = 1:N
-#             if i == j
-#                 push!(row_blocks, A_list[i])  # Diagonal blocks
-#             elseif j == i + 1
-#                 push!(row_blocks, B_list[i])  # Upper diagonal blocks
-#             elseif j == i - 1
-#                 push!(row_blocks, B_list[j]')  # Lower diagonal blocks (transpose)
-#             else
-#                 push!(row_blocks, zeros(n, n))  # Zero blocks elsewhere
-#             end
-#         end
-#         push!(blocks, hcat(row_blocks...))
-#     end
-    
-#     return vcat(blocks...), vcat(d_list...)
-# end
+function generate_tridiagonal_system(N::Int, n::Int)
 
-function generate_tridiagonal_system(N::Int, n::Int)  #TODO make the whole matrix positive definite
-    # Generate A_list (diagonal block matrices)
-    A_list = zeros(n, n, N)
+    A_L_list = zeros(n, n, N)
     for i in 1:N
-        temp = randn(Float64, n, n)
-        A_list[:, :, i] = temp * temp' + n * I
+        L = LowerTriangular(randn(Float64, n, n))
+        for i in 1:n
+            L[i, i] = abs(L[i, i]) + 1.0
+        end
+        A_L_list[:, :, i] = L
+    end
+
+    B_L_list = zeros(n, n, N-1)
+    for i in 1:N-1
+        B_L_list[:, :, i] = randn(Float64, n, n)
+    end
+
+    A_list = zeros(n, n, N)
+    A_list[:, :, 1] = A_L_list[:, :, 1] * A_L_list[:, :, 1]'
+    for i in 2:N
+        A_list[:, :, i] = A_L_list[:, :, i] * A_L_list[:, :, i]' + B_L_list[:, :, i-1]' * B_L_list[:, :, i-1]
     end
 
     # Generate B_list (off-diagonal block matrices)
     B_list = zeros(n, n, N-1)
     for i in 1:N-1
-        temp = randn(Float64, n, n)
-        B_list[:, :, i] = temp
+        B_list[:, :, i] = A_L_list[:, :, i] * B_L_list[:, :, i]'
     end
 
     # Generate x_true

@@ -5,9 +5,8 @@ import LinearAlgebra.BLAS: gemm! as lagemm!
 import LinearAlgebra.BLAS: trsm! as latrsm!
 import LinearAlgebra.LAPACK: potrf! as lapotrf!
 import LinearAlgebra: norm as lanorm
-import LinearAlgebra: I
 
-# GPU BLAS/LAPACK operations
+# GPU BLAS/LAPACK operations #TODO move CUDA as weakdep
 import CUDA.CUBLAS: gemm! as cugemm!
 import CUDA.CUBLAS: trsm! as cutrsm!
 import CUDA.CUSOLVER: potrf! as cupotrf!
@@ -18,10 +17,11 @@ import CUDA: StridedCuMatrix, CuMatrix, CuArray
 import CUDA.CUBLAS: gemm_batched!, trsm_batched! 
 import CUDA.CUSOLVER: potrfBatched!
 
-using SparseArrays
+# SparseArrays
+import SparseArrays: SparseMatrixCSC
 
 # Export functions
-export mynorm
+export _bss_norm
 export initialize, factorize!, solve!
 export construct_block_tridiagonal, generate_data, detect_block_tridiagonal, detect_spaces_and_divide_csc
 

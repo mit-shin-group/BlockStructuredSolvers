@@ -77,5 +77,5 @@ plot!(p1, N_values, solve_times,
     marker=:square)
 
 # Save plot to file
-savefig(p1, "block_cholesky_complexity.png")
-println("Plot saved to block_cholesky_complexity.png")
+savefig(p1, "block_cholesky_complexity.svg")
+println("Plot saved to block_cholesky_complexity.svg")

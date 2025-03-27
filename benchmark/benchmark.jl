@@ -44,34 +44,27 @@ function run(m, n, P_start, level)
 
     BigMatrix_57 = nothing
 
-    # Warmup Cholesky
+    # CHOLMOD
     chol_factor_time = @elapsed F = cholesky(BigMatrix)
     chol_solve_time = @elapsed F \ d
 
     F = nothing
 
-    # Warmup LDLᵀ
+    # LDLFactorizations 
     ldl_factor_time = @elapsed LDLT = ldl(BigMatrix; P=Vector(1:N*n))
     ldl_solve_time = @elapsed LDLT \ d
 
     LDLT = nothing
 
+    # CUDSS
     BigMatrix_cudss = CUSPARSE.CuSparseMatrixCSR(BigMatrix)
     d_cudss = CuArray(d)
-    # start_time = time()
     chol = CUDSS.cholesky(BigMatrix_cudss; check=false)
     cudss_factor_time = CUDA.@elapsed blocking=true CUDSS.cholesky(BigMatrix_cudss; check=false)
-    # CUDA.synchronize()
-    # cudss_factor_time = time() - start_time
     
     # Time CUDSS solve using events
     x_cudss = deepcopy(d_cudss)
-    # start_time = time()
-    # cudss_solve_time = time() - start_time
     cudss_solve_time = CUDA.@elapsed blocking=true cudss("solve", chol, x_cudss, d_cudss)
-    # mynorm(x_cudss - d_57) #TODO: not working
-    # CUDA.synchronize()
-    # cudss_solve_time = time() - start_time
 
     BigMatrix_cudss = nothing
     chol = nothing
@@ -134,9 +127,9 @@ function benchmark_factorization_and_solve(iter)
 
     println("Starting warmup...")
 
-    _ = run(2, 10, 3, 3)
+    _ = run(2, 10, 3, 1)
 
-    (m, n, P_start, level) = (3, 128, 3, 3) #(4, 200, 3, 4)
+    (m, n, P_start, level) = (33, 128, 33, 1) #(4, 200, 3, 4)
 
     P = P_start
     N = P * (m + 1) - m
@@ -177,8 +170,8 @@ function benchmark_factorization_and_solve(iter)
     println("\nAverage Factorization and Solve Times over ", iter, " Runs:", " N: $N, n: $n, P: $P, m: $m, level: $level")
     println("---------------------------------------------------")
     @printf("MA57 - Factorize: %.6f ms, Solve: %.6f ms\n", mean(ma57_factor_times) * 1000, mean(ma57_solve_times) * 1000)
-    @printf("Cholesky - Factorize: %.6f ms, Solve: %.6f ms\n", mean(chol_factor_times) * 1000, mean(chol_solve_times) * 1000)
-    @printf("LDLᵀ - Factorize: %.6f ms, Solve: %.6f ms\n", mean(ldl_factor_times) * 1000, mean(ldl_solve_times) * 1000)
+    @printf("CHOLMOD - Factorize: %.6f ms, Solve: %.6f ms\n", mean(chol_factor_times) * 1000, mean(chol_solve_times) * 1000)
+    @printf("LDLFactorizations - Factorize: %.6f ms, Solve: %.6f ms\n", mean(ldl_factor_times) * 1000, mean(ldl_solve_times) * 1000)
     @printf("CUDSS - Factorize: %.6f ms, Solve: %.6f ms\n", mean(cudss_factor_times) * 1000, mean(cudss_solve_times) * 1000)
     @printf("CPU - Factorize: %.6f ms, Solve: %.6f ms\n", mean(cpu_factor_times) * 1000, mean(cpu_solve_times) * 1000)
     @printf("GPU - Factorize: %.6f ms, Solve: %.6f ms\n", mean(gpu_factor_times) * 1000, mean(gpu_solve_times) * 1000)
@@ -187,8 +180,8 @@ function benchmark_factorization_and_solve(iter)
     println("\nStandard Deviations:")
     println("---------------------------------------------------")
     @printf("MA57 - Factorize: %.6f ms, Solve: %.6f ms\n", std(ma57_factor_times) * 1000, std(ma57_solve_times) * 1000)
-    @printf("Cholesky - Factorize: %.6f ms, Solve: %.6f ms\n", std(chol_factor_times) * 1000, std(chol_solve_times) * 1000)
-    @printf("LDLᵀ - Factorize: %.6f ms, Solve: %.6f ms\n", std(ldl_factor_times) * 1000, std(ldl_solve_times) * 1000)
+    @printf("CHOLMOD - Factorize: %.6f ms, Solve: %.6f ms\n", std(chol_factor_times) * 1000, std(chol_solve_times) * 1000)
+    @printf("LDLFactorizations - Factorize: %.6f ms, Solve: %.6f ms\n", std(ldl_factor_times) * 1000, std(ldl_solve_times) * 1000)
     @printf("CUDSS - Factorize: %.6f ms, Solve: %.6f ms\n", std(cudss_factor_times) * 1000, std(cudss_solve_times) * 1000)
     @printf("CPU - Factorize: %.6f ms, Solve: %.6f ms\n", std(cpu_factor_times) * 1000, std(cpu_solve_times) * 1000)
     @printf("GPU - Factorize: %.6f ms, Solve: %.6f ms\n", std(gpu_factor_times) * 1000, std(gpu_solve_times) * 1000)

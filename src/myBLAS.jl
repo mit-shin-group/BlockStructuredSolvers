@@ -1,3 +1,4 @@
+#TODO might not need CUDA potrf/... anymore due to batched implementation
 function mypotrf!(uplo::Char, A::StridedCuMatrix{T}) where {T}
 
     cupotrf!(uplo, A)
@@ -34,13 +35,13 @@ function mytrsm!(side::Char, uplo::Char, transa::Char, diag::Char, alpha::Number
 
 end
 
-function mynorm(A::Vector{<:CuMatrix{T}}) where {T}
+function _bss_norm(A::Vector{<:CuMatrix{T}}) where {T}
 
     cunorm(A)
 
 end
 
-function mynorm(A::Vector{<:AbstractMatrix{T}}) where {T}
+function _bss_norm(A::Vector{<:AbstractMatrix{T}}) where {T}
 
     lanorm(A)
 

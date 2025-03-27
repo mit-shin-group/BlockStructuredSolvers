@@ -4,11 +4,10 @@
 
     A_list, B_list, x_list, x, d_list = generate_data(N, n)
     BigMatrix, d = construct_block_tridiagonal(A_list, B_list, d_list)
-    N_blocks, block_size = detect_block_tridiagonal(BigMatrix)
+    N_blocks, block_size = detect_spaces_and_divide_csc(BigMatrix)
 
-    # Run 3 times
     for run in 2:10
-        println("Run $run/3")
+        println("Run $run/10")
         
         #######################################
         A_list, B_list, x_list, x, d_list = generate_data(N, n)
@@ -20,19 +19,5 @@
         @test N_blocks == N
         @test block_size == n
 
-        #################################################
-
-        # ϵ = sqrt(eps(eltype(A_list[1])));
-
-        # data = initialize(N, n, A_list, B_list);
-
-        # GC.gc()
-        # println("  Factorization:")
-        # @time factorize!(data)
-        
-        # println("  Solve:")
-        # @time solve!(data, d_list, x)
-
-        # @test mynorm(x - x_list) ≤ ϵ * mynorm(d_list)
     end
 end
