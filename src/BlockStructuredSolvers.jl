@@ -23,7 +23,7 @@ using SparseArrays
 # Export functions
 export mynorm
 export initialize, factorize!, solve!
-export construct_block_tridiagonal, generate_data, detect_block_tridiagonal
+export construct_block_tridiagonal, generate_data, detect_block_tridiagonal, detect_spaces_and_divide_csc
 
 # Include files
 include("myBLAS.jl")

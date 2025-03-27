@@ -4,6 +4,7 @@ using Random
 using LDLFactorizations
 using HSL
 using CUDSS
+using MKL
 using BlockStructuredSolvers
 
 import Pkg
@@ -14,7 +15,9 @@ using Printf, ProgressBars, Statistics
 
 ######
 
-n = 10 # size of each block
+println(LinearAlgebra.BLAS.get_config())
+
+n = 32 # size of each block
 m = 2 # number of blocks between separators
 P_last = 3 # number of separators
 level = 4; # number of nested level
@@ -55,18 +58,20 @@ function run(m, n, P_start, level)
 
     BigMatrix_cudss = CUSPARSE.CuSparseMatrixCSR(BigMatrix)
     d_cudss = CuArray(d)
-    start_time = time()
+    # start_time = time()
     chol = CUDSS.cholesky(BigMatrix_cudss; check=false)
-    CUDA.synchronize()
-    cudss_factor_time = time() - start_time
+    cudss_factor_time = CUDA.@elapsed blocking=true CUDSS.cholesky(BigMatrix_cudss; check=false)
+    # CUDA.synchronize()
+    # cudss_factor_time = time() - start_time
     
     # Time CUDSS solve using events
     x_cudss = deepcopy(d_cudss)
-    start_time = time()
-    cudss("solve", chol, x_cudss, d_cudss)
-    mynorm(x_cudss - d_57) #TODO: not working
-    CUDA.synchronize()
-    cudss_solve_time = time() - start_time
+    # start_time = time()
+    # cudss_solve_time = time() - start_time
+    cudss_solve_time = CUDA.@elapsed blocking=true cudss("solve", chol, x_cudss, d_cudss)
+    # mynorm(x_cudss - d_57) #TODO: not working
+    # CUDA.synchronize()
+    # cudss_solve_time = time() - start_time
 
     BigMatrix_cudss = nothing
     chol = nothing
@@ -131,7 +136,7 @@ function benchmark_factorization_and_solve(iter)
 
     _ = run(2, 10, 3, 3)
 
-    (m, n, P_start, level) = (3, 100, 3, 4) #(4, 200, 3, 4)
+    (m, n, P_start, level) = (3, 128, 3, 3) #(4, 200, 3, 4)
 
     P = P_start
     N = P * (m + 1) - m
