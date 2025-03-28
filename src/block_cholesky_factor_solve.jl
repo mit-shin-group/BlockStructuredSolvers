@@ -9,19 +9,16 @@ struct BlockTriDiagData{
     P::Int
 
     I_separator::Vector{Int}
-    I_non_separator::Vector{Int}
 
     A_list::MT
     B_list::MT
-
+    d_list::MT
     LHS_A_list::MT
     LHS_B_list::MT
 
     factor_list::MT
     temp_list::MT
     temp_B_list::MT
-
-    RHS::MT
 
     M_2n_list::MT
     factor_list_temp::MT
@@ -30,7 +27,13 @@ struct BlockTriDiagData{
 
 end
 
-function initialize(N, n, A_list_final, B_list_final, parallel)
+function initialize(N, n, T::Type, use_GPU::Bool)
+
+    if use_GPU
+        MT = CuMatrix{T}
+    else
+        MT = Matrix{T}
+    end
 
     data = nothing;
     level = 0;
@@ -67,33 +70,19 @@ function initialize(N, n, A_list_final, B_list_final, parallel)
         m = m_list[i]
        
         I_separator = I_separator_list[i]
-        I_non_separator = setdiff(1:N, I_separator)
 
-        # TODO slow?
-        if i == 1
-            LHS_A_list = [zero(similar(A_list_final[1], n, n)) for i in 1:P];
-            LHS_B_list = [zero(similar(B_list_final[1], n, n)) for i in 1:P-1];
-        else
-            LHS_A_list = deepcopy(data.A_list)
-            LHS_B_list = deepcopy(data.B_list)
-        end
+        A_list = [MT(zeros(n, n)) for i in 1:N]; 
+        B_list = [MT(zeros(n, n)) for i in 1:N-1];
+        d_list = [MT(zeros(n, 1)) for i in 1:N];
+        LHS_A_list = [MT(zeros(n, n)) for i in 1:P]
+        LHS_B_list = [MT(zeros(n, n)) for i in 1:P-1]
 
-        RHS = [zero(similar(A_list_final[1], n, 1)) for i in 1:P];
+        factor_list = [MT(zeros(n, 2*n)) for j = 1:N];
+        temp_list = [MT(zeros(2*n, 1)) for i = 1:P-1];
+        temp_B_list = [MT(zeros(n, n)) for i = 1:2*(P-1)];
 
-        factor_list = [similar(A_list_final[1], n, 2*n) for j = 1:N];
-        temp_list = [zero(similar(A_list_final[1], 2*n, 1)) for i = 1:P-1];
-        temp_B_list = [similar(A_list_final[1], n, n) for i = 1:2*(P-1)];
-
-        M_2n_list = [zero(similar(A_list_final[1], 2*n, 2*n)) for i in 1:P-1];
-        factor_list_temp = [zero(similar(A_list_final[1], n, 2*n)) for i in 1:N];
-
-        if i == level
-            A_list = A_list_final
-            B_list = B_list_final
-        else
-            A_list = [zero(similar(A_list_final[1], n, n)) for i in 1:N];
-            B_list = [zero(similar(B_list_final[1], n, n)) for i in 1:N-1];
-        end
+        M_2n_list = [MT(zeros(2*n, 2*n)) for i in 1:P-1];
+        factor_list_temp = [MT(zeros(n, 2*n)) for i in 1:N];
 
         data = BlockTriDiagData(
             N, 
@@ -101,22 +90,18 @@ function initialize(N, n, A_list_final, B_list_final, parallel)
             n, 
             P, 
             I_separator,
-            I_non_separator,
             A_list, 
             B_list,
+            d_list,
             LHS_A_list,
             LHS_B_list,
             factor_list,
             temp_list,
             temp_B_list,
-            RHS,
             M_2n_list,
             factor_list_temp,
             data
             );
-
-        P = N;
-        N = P * (m + 1) - m;
 
     end
 
@@ -156,36 +141,35 @@ function factorize!(data::BlockTriDiagData)
     end
 end
 
-function solve!(data::BlockTriDiagData, d_list, x)
+function solve!(data::BlockTriDiagData, d_list)
 
     P = data.P
     n = data.n
     m = data.m
     I_separator = data.I_separator
-    I_non_separator = data.I_non_separator
-    RHS = data.RHS
-
-    # Copy d_list to RHS
-    copy_vector_of_arrays!(RHS, view(d_list, I_separator))
+    A_list = data.A_list
+    B_list = data.B_list
+    LHS_A_list = data.LHS_A_list
+    LHS_B_list = data.LHS_B_list
+    factor_list = data.factor_list
+    temp_list = data.temp_list
+    temp_B_list = data.temp_B_list
 
     # Compute RHS from Schur complement
-    compute_schur_rhs!(data.factor_list, d_list, data.temp_list, RHS, I_separator, P, m, n)
+    compute_schur_rhs!(factor_list, d_list, temp_list, I_separator, P, m, n)
 
     # Solve system
     if isnothing(data.NextData)
-        cholesky_solve!(data.LHS_A_list, data.LHS_B_list, RHS, P)
-        copy_vector_of_arrays!(view(x, I_separator), RHS)
+        cholesky_solve!(LHS_A_list, LHS_B_list, view(d_list, I_separator), P)
     else
-        solve!(data.NextData, RHS, view(x, I_separator))
+        solve!(data.NextData, view(d_list, I_separator)) #TODO
     end
 
     # Update d after Schur solve
-    update_boundary_solution!(data.temp_B_list, x, d_list, I_separator, P)
+    update_boundary_solution!(temp_B_list, d_list, d_list, I_separator, P)
 
     # Solve for non-separators
-    solve_non_separator_blocks!(data.A_list, data.B_list, d_list, I_separator, P, m)
-
-    copy_vector_of_arrays!(view(x, I_non_separator), view(d_list, I_non_separator))
+    solve_non_separator_blocks!(A_list, B_list, d_list, I_separator, P, m)
 
     return nothing
 end

@@ -1,3 +1,76 @@
+function TBDSolver(A::SparseMatrixCSC{T, Int}) where T
+
+    N, n = detect_spaces_and_divide_csc(A)
+    solver = initialize(N, n, eltype(A), true)
+    extract_AB_list(solver, A)
+    
+    return solver
+
+end
+
+# function MADNLP.factorize!(solver::BlockTriDiagData)
+
+#     factorize!(solver)
+
+# end
+
+# function MADNLP.solve!(solver::BlockTriDiagData, d_list, x)
+
+#     solve!(solver, d_list, x)
+
+# end
+
+function extract_AB_list(solver::BlockTriDiagData, A::SparseMatrixCSC{T, Int}) where T
+
+    A_list = solver.A_list
+    B_list = solver.B_list
+    n = solver.n
+    N = solver.N
+   
+   # Fill A_list and B_list from the sparse matrix
+   for col in 1:size(A, 2)
+       block_col = (col - 1) ÷ n + 1
+       col_in_block = (col - 1) % n + 1
+       
+       for ptr in A.colptr[col]:(A.colptr[col+1]-1)
+           row = A.rowval[ptr]
+           val = A.nzval[ptr]
+           
+           block_row = (row - 1) ÷ n + 1
+           row_in_block = (row - 1) % n + 1
+           
+           if block_row == block_col
+               # Diagonal block
+               A_list[block_row][row_in_block, col_in_block] = val
+           elseif block_row == block_col - 1
+               # Upper off-diagonal block
+               B_list[block_row][row_in_block, col_in_block] = val
+           elseif block_row == block_col + 1
+               # Lower off-diagonal block (transpose of upper)
+               B_list[block_col][col_in_block, row_in_block] = val
+           end
+       end
+   end
+
+end
+
+function extract_d_list(d_list, d::Vector{T}, N::Int, n::Int) where T
+    
+    # Fill d_list from d
+    for i in 1:N
+        # Calculate the range of indices for this block
+        start_idx = (i-1)*n+1
+        end_idx = min(i*n, length(d))
+        
+        # Only copy values if we have data to copy
+        if start_idx <= length(d)
+            # Copy available values (d_list is already initialized with zeros)
+            d_list[i][1:(end_idx-start_idx+1), 1] = view(d, start_idx:end_idx)
+        end
+    end
+    
+end
+
 function detect_spaces_and_divide_csc(csc_matrix::SparseMatrixCSC)
     # Extract the necessary components from the CSC matrix
     colptr = csc_matrix.colptr

@@ -151,27 +151,27 @@ function compute_schur_complement!(A_list::Vector{<:CuMatrix}, B_list::Vector{<:
 
 end
 
-function compute_schur_rhs!(factor_list::Vector{<:AbstractMatrix}, d_list, temp_list, RHS, I_separator, P, m, n)
+function compute_schur_rhs!(factor_list::Vector{<:AbstractMatrix}, d_list, temp_list, I_separator, P, m, n)
 
     for i = 1:P-1
         for j = I_separator[i]+1:I_separator[i+1]-1
             mygemm!('T', 'N', -1.0, factor_list[j], d_list[j], 1.0, temp_list[i])
         end
-        RHS[i] .+= view(temp_list[i], 1:n, :)
-        RHS[i+1] .+= view(temp_list[i], n+1:2*n, :)
+        d_list[I_separator[i]] .+= view(temp_list[i], 1:n, :)
+        d_list[I_separator[i+1]] .+= view(temp_list[i], n+1:2*n, :)
     end
 
 end
 
-function compute_schur_rhs!(factor_list::Vector{<:CuMatrix}, d_list, temp_list, RHS, I_separator, P, m, n)
+function compute_schur_rhs!(factor_list::Vector{<:CuMatrix}, d_list, temp_list, I_separator, P, m, n)
 
     for i = 2:m+1
         gemm_batched!('T', 'N', -1.0, factor_list[i:(m+1):end], d_list[i:(m+1):end], 1.0, temp_list[1:length(factor_list[i:(m+1):end])])
     end
     
     for i = 1:P-1
-        RHS[i] .+= view(temp_list[i], 1:n, :)
-        RHS[i+1] .+= view(temp_list[i], n+1:2*n, :)
+        d_list[I_separator[i]] .+= view(temp_list[i], 1:n, :)
+        d_list[I_separator[i+1]] .+= view(temp_list[i], n+1:2*n, :)
     end
 end
 

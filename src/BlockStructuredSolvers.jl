@@ -23,6 +23,7 @@ import SparseArrays: SparseMatrixCSC
 # Export functions
 export _bss_norm
 export initialize, factorize!, solve!
+export copy_vector_of_arrays!
 export construct_block_tridiagonal, generate_data, detect_block_tridiagonal, detect_spaces_and_divide_csc
 
 # Include files
