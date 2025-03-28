@@ -155,14 +155,19 @@ function solve!(data::BlockTriDiagData, d_list)
     temp_list = data.temp_list
     temp_B_list = data.temp_B_list
 
+    # cache d_I_separator for frequent use
+    d_I_separator = view(d_list, I_separator)
+
     # Compute RHS from Schur complement
     compute_schur_rhs!(factor_list, d_list, temp_list, I_separator, P, m, n)
 
     # Solve system
     if isnothing(data.NextData)
-        cholesky_solve!(LHS_A_list, LHS_B_list, view(d_list, I_separator), P)
+        cholesky_solve!(LHS_A_list, LHS_B_list, d_I_separator, P)
     else
-        solve!(data.NextData, view(d_list, I_separator)) #TODO
+        copy_vector_of_arrays!(data.NextData.d_list, d_I_separator)
+        solve!(data.NextData, data.NextData.d_list)
+        copy_vector_of_arrays!(view(d_list, I_separator), data.NextData.d_list)
     end
 
     # Update d after Schur solve
