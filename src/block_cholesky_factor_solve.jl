@@ -71,7 +71,7 @@ function initialize(N, n, T::Type, use_GPU::Bool)
        
         I_separator = I_separator_list[i]
 
-        A_list = [MT(zeros(n, n)) for i in 1:N]; 
+        A_list = [MT(Matrix{T}(I, n, n)) for i in 1:N];
         B_list = [MT(zeros(n, n)) for i in 1:N-1];
         d_list = [MT(zeros(n, 1)) for i in 1:N];
         LHS_A_list = [MT(zeros(n, n)) for i in 1:P]
@@ -167,7 +167,7 @@ function solve!(data::BlockTriDiagData, d_list)
     else
         copy_vector_of_arrays!(data.NextData.d_list, d_I_separator)
         solve!(data.NextData, data.NextData.d_list)
-        copy_vector_of_arrays!(view(d_list, I_separator), data.NextData.d_list)
+        copy_vector_of_arrays!(d_I_separator, data.NextData.d_list)
     end
 
     # Update d after Schur solve

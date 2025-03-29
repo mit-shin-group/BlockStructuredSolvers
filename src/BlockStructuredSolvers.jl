@@ -5,6 +5,7 @@ import LinearAlgebra.BLAS: gemm! as lagemm!
 import LinearAlgebra.BLAS: trsm! as latrsm!
 import LinearAlgebra.LAPACK: potrf! as lapotrf!
 import LinearAlgebra: norm as lanorm
+import LinearAlgebra: I
 
 # GPU BLAS/LAPACK operations #TODO move CUDA as weakdep
 import CUDA.CUBLAS: gemm! as cugemm!
