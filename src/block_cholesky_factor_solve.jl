@@ -25,6 +25,9 @@ struct BlockTriDiagData{
 
     NextData::Union{BlockTriDiagData, Nothing}
 
+    factorize!::Function
+    solve!::Function
+
 end
 
 function initialize(N, n, T::Type, use_GPU::Bool)
@@ -100,7 +103,9 @@ function initialize(N, n, T::Type, use_GPU::Bool)
             temp_B_list,
             M_2n_list,
             factor_list_temp,
-            data
+            data,
+            factorize!,
+            solve!
             );
 
     end
@@ -171,7 +176,7 @@ function solve!(data::BlockTriDiagData, d_list)
     end
 
     # Update d after Schur solve
-    update_boundary_solution!(temp_B_list, d_list, d_list, I_separator, P)
+    update_boundary_solution!(temp_B_list, d_list, I_separator, P)
 
     # Solve for non-separators
     solve_non_separator_blocks!(A_list, B_list, d_list, I_separator, P, m)

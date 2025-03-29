@@ -154,6 +154,7 @@ end
 function compute_schur_rhs!(factor_list::Vector{<:AbstractMatrix}, d_list, temp_list, I_separator, P, m, n)
 
     for i = 1:P-1
+        fill!(temp_list[i], 0.0)
         for j = I_separator[i]+1:I_separator[i+1]-1
             mygemm!('T', 'N', -1.0, factor_list[j], d_list[j], 1.0, temp_list[i])
         end
@@ -165,7 +166,9 @@ end
 
 function compute_schur_rhs!(factor_list::Vector{<:CuMatrix}, d_list, temp_list, I_separator, P, m, n)
 
-    for i = 2:m+1
+    gemm_batched!('T', 'N', -1.0, factor_list[2:(m+1):end], d_list[2:(m+1):end], 0.0, temp_list[1:length(factor_list[2:(m+1):end])])
+
+    for i = 3:m+1
         gemm_batched!('T', 'N', -1.0, factor_list[i:(m+1):end], d_list[i:(m+1):end], 1.0, temp_list[1:length(factor_list[i:(m+1):end])])
     end
     
@@ -175,19 +178,19 @@ function compute_schur_rhs!(factor_list::Vector{<:CuMatrix}, d_list, temp_list, 
     end
 end
 
-function update_boundary_solution!(temp_B_list::Vector{<:AbstractMatrix}, x, d_list, I_separator, P)
+function update_boundary_solution!(temp_B_list::Vector{<:AbstractMatrix}, d_list, I_separator, P)
 
     @inbounds for j = 1:P-1
-        mygemm!('T', 'N', -1.0, temp_B_list[2*(j-1)+1], x[I_separator[j]], 1.0, d_list[I_separator[j]+1])
-        mygemm!('N', 'N', -1.0, temp_B_list[2*j], x[I_separator[j+1]], 1.0, d_list[I_separator[j+1]-1])
+        mygemm!('T', 'N', -1.0, temp_B_list[2*(j-1)+1], d_list[I_separator[j]], 1.0, d_list[I_separator[j]+1])
+        mygemm!('N', 'N', -1.0, temp_B_list[2*j], d_list[I_separator[j+1]], 1.0, d_list[I_separator[j+1]-1])
     end
 
 end
 
-function update_boundary_solution!(temp_B_list::Vector{<:CuMatrix}, x, d_list, I_separator, P)
+function update_boundary_solution!(temp_B_list::Vector{<:CuMatrix}, d_list, I_separator, P)
 
-    gemm_batched!('T', 'N', -1.0, temp_B_list[1:2:end], x[I_separator[1:P-1]], 1.0, d_list[I_separator[1:P-1].+1])
-    gemm_batched!('N', 'N', -1.0, temp_B_list[2:2:end], x[I_separator[2:P]], 1.0, d_list[I_separator[2:P].-1])
+    gemm_batched!('T', 'N', -1.0, temp_B_list[1:2:end], d_list[I_separator[1:P-1]], 1.0, d_list[I_separator[1:P-1].+1])
+    gemm_batched!('N', 'N', -1.0, temp_B_list[2:2:end], d_list[I_separator[2:P]], 1.0, d_list[I_separator[2:P].-1])
 
 end
 
