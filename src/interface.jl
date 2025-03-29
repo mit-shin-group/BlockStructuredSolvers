@@ -8,17 +8,23 @@ function TBDSolver(A::SparseMatrixCSC{T, Int}) where T
 
 end
 
-# function MADNLP.factorize!(solver::BlockTriDiagData)
+function factorize!(solver::BlockTriDiagData)
 
-#     factorize!(solver)
+    solver.factorize!(solver)
+    
+    return solver
 
-# end
+end
 
-# function MADNLP.solve!(solver::BlockTriDiagData, d_list, x)
+function solve!(solver::BlockTriDiagData, d)
 
-#     solve!(solver, d_list, x)
+    #TODO convert d to d_list
+    solver.solve!(solver, d)
+    #TODO convert d_list to d
 
-# end
+    return d
+
+end
 
 function extract_AB_list(solver::BlockTriDiagData, A::SparseMatrixCSC{T, Int}) where T
 
