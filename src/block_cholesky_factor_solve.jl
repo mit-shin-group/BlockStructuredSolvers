@@ -1,6 +1,7 @@
 struct BlockTriDiagData{
     T, 
-    MT <: Vector{<:AbstractMatrix{T}}
+    MT <: AbstractMatrix{T},
+    VMT :: Vector{MT}
     }
 
     N::Int
@@ -10,27 +11,54 @@ struct BlockTriDiagData{
 
     I_separator::Vector{Int}
 
-    A_list::MT
-    B_list::MT
-    d_list::MT
-    LHS_A_list::MT
-    LHS_B_list::MT
+    LHS_vec::MT
+    A_list::VMT
+    B_list::VMT
 
-    factor_list::MT
-    temp_list::MT
-    temp_B_list::MT
+    d::MT
+    d_list::VMT
 
-    M_2n_list::MT
-    factor_list_temp::MT
+    LHS_A_list::VMT
+    LHS_B_list::VMT
+
+    factor_list::VMT
+    temp_list::VMT
+    temp_B_list::VMT
+
+    M_2n_list::VMT
+    factor_list_temp::VMT
 
     NextData::Union{BlockTriDiagData, Nothing}
 
-    factorize!::Function
-    solve!::Function
+end
+
+function extract_AB_list!(LHS_vec::MT, A_list::Vector{MT}, B_list::Vector{MT}, N::Int, n::Int) where {T, MT<:AbstractMatrix{T}}
+
+    LHS_vec_ptr = pointer(LHS_vec)
+
+    for i in 1:N-1
+
+        A_list[i] = unsafe_wrap(MT, LHS_vec_ptr + 2*n^2*(i-1)*sizeof(T), (n, n); own=false)
+        B_list[i] = unsafe_wrap(MT, LHS_vec_ptr + 2*n^2*(i-1)*sizeof(T) + n^2*sizeof(T), (n, n); own=false)
+    end
+
+    A_list[N] = unsafe_wrap(MT, LHS_vec_ptr + 2*n^2*(N-1)*sizeof(T), (n, n); own=false)
 
 end
 
-function initialize(N, n, T::Type, use_GPU::Bool)
+# Extracts x_list_gpu from x_gpu using unsafe_wrap
+function extract_d_list!(d::MT, d_list::Vector{MT}, N::Int, n::Int) where {T, MT<:AbstractMatrix{T}}
+
+    # Get the raw pointer to the full vector data
+    d_ptr = pointer(d)
+    
+    for i in 1:N
+        d_list[i] = unsafe_wrap(MT, d_ptr + n *(i-1) * sizeof(T), (n, 1); 
+                                own=false)
+    end
+ end
+
+function initialize(N::Int, n::Int, T::Type, use_GPU::Bool)
 
     if use_GPU
         MT = CuMatrix{T}
@@ -74,9 +102,15 @@ function initialize(N, n, T::Type, use_GPU::Bool)
        
         I_separator = I_separator_list[i]
 
+        LHS_vec = MT(zeros((2*N-1)*n^2, 1))
         A_list = [MT(Matrix{T}(I, n, n)) for i in 1:N];
         B_list = [MT(zeros(n, n)) for i in 1:N-1];
+        extract_AB_list!(LHS_vec, A_list, B_list, N, n)
+
+        d = MT(zeros(N *n, 1))
         d_list = [MT(zeros(n, 1)) for i in 1:N];
+        extract_d_list!(d, d_list, N, n)
+
         LHS_A_list = [MT(zeros(n, n)) for i in 1:P]
         LHS_B_list = [MT(zeros(n, n)) for i in 1:P-1]
 
@@ -93,8 +127,10 @@ function initialize(N, n, T::Type, use_GPU::Bool)
             n, 
             P, 
             I_separator,
+            LHS_vec,
             A_list, 
             B_list,
+            d,
             d_list,
             LHS_A_list,
             LHS_B_list,
@@ -103,9 +139,7 @@ function initialize(N, n, T::Type, use_GPU::Bool)
             temp_B_list,
             M_2n_list,
             factor_list_temp,
-            data,
-            factorize!,
-            solve!
+            data
             );
 
     end
@@ -146,7 +180,7 @@ function factorize!(data::BlockTriDiagData)
     end
 end
 
-function solve!(data::BlockTriDiagData, d_list)
+function solve!(data::BlockTriDiagData, d_list::Vector{MT}) where {MT<:AbstractMatrix{T}}
 
     P = data.P
     n = data.n
@@ -182,4 +216,45 @@ function solve!(data::BlockTriDiagData, d_list)
     solve_non_separator_blocks!(A_list, B_list, d_list, I_separator, P, m)
 
     return nothing
+end
+
+function solve!(data::BlockTriDiagData, d<:AbstractMatrix{T})
+
+    P = data.P
+    n = data.n
+    m = data.m
+    I_separator = data.I_separator
+    A_list = data.A_list
+    B_list = data.B_list
+    LHS_A_list = data.LHS_A_list
+    LHS_B_list = data.LHS_B_list
+    factor_list = data.factor_list
+    temp_list = data.temp_list
+    temp_B_list = data.temp_B_list
+
+    copyto!(data.d, d)
+
+    # cache d_I_separator for frequent use
+    d_I_separator = view(d_list, I_separator)
+
+    # Compute RHS from Schur complement
+    compute_schur_rhs!(factor_list, d_list, temp_list, I_separator, P, m, n)
+
+    # Solve system
+    if isnothing(data.NextData)
+        cholesky_solve!(LHS_A_list, LHS_B_list, d_I_separator, P)
+    else
+        copy_vector_of_arrays!(data.NextData.d_list, d_I_separator)
+        solve!(data.NextData, data.NextData.d_list)
+        copy_vector_of_arrays!(d_I_separator, data.NextData.d_list)
+    end
+
+    # Update d after Schur solve
+    update_boundary_solution!(temp_B_list, d_list, I_separator, P)
+
+    # Solve for non-separators
+    solve_non_separator_blocks!(A_list, B_list, d_list, I_separator, P, m)
+
+    copyto!(d, view(data.d, 1:length(d)))
+
 end
