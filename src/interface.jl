@@ -8,12 +8,8 @@ mutable struct TBDSolver{T} <: MadNLP.AbstractLinearSolver{T}
     inner::Union{Nothing, BlockTriDiagData}
     tril::CUSPARSE.CuSparseMatrixCSC{T}
     
-    # Full vector representation
-    x_gpu::CUDA.CuVector{T} #TODO same size as MADNLP
-    
-    # Block representation with direct memory connection to x_gpu
-    x_list_gpu::Vector{CuMatrix{T}}
-    
+    # not used
+    x_gpu::CUDA.CuVector{T}
     b_gpu::CUDA.CuVector{T}
 
     opt::MadNLP.AbstractOptions
@@ -29,34 +25,34 @@ function TBDSolver(
     #TODO ordering
     N, n = detect_spaces_and_divide_csc(csc)
     println("N, n = ", N, ", ", n)
+    # N = 50
+    # n = 2
     solver = initialize(N, n, eltype(csc), true)
-
-    # Create full vector
+    
+    # Create full vector but never used
     x_gpu = CUDA.zeros(T, N*n)
-    
-    # Create blocks that directly reference the memory in x_gpu
-    x_list_gpu = Vector{CuMatrix{T}}(undef, N)
-    
-    # Initialize x_list_gpu from x_gpu
-    extract_x_list!(x_gpu, x_list_gpu, N, n)
-    
     b_gpu = CUDA.zeros(T, N*n)
 
-    return TBDSolver(solver, csc, x_gpu, x_list_gpu, b_gpu, opt, logger)
+    return TBDSolver(solver, csc, x_gpu, b_gpu, opt, logger)
 end
 
 function MadNLP.factorize!(solver::TBDSolver{T}) where T
-    # Use the extract_AB_csc_list directly when inner solver supports CSC blocks
-    # For now, convert to dense as before
-    extract_AB_list!(solver.tril, solver.inner.A_list, solver.inner.B_list, solver.inner.N, solver.inner.n)
+
+    fill!(solver.inner.LHS_vec, 0)
+    fill_block_vecs!(solver.tril, solver.inner.LHS_vec, solver.inner.N, solver.inner.n)
     BlockStructuredSolvers.factorize!(solver.inner)
     return solver
 end
 
 function MadNLP.solve!(solver::TBDSolver{T}, d) where T
-    
-    BlockStructuredSolvers.solve!(solver.inner, d)
-    
+
+    fill!(solver.inner.d, 0)
+    println("d = ", CUDA.norm(solver.inner.d))
+    copyto!(solver.inner.d, d)
+    println("d = ", CUDA.norm(solver.inner.d))
+    BlockStructuredSolvers.solve!(solver.inner, solver.inner.d_list)
+    copyto!(d, view(solver.inner.d, 1:length(d)))
+
     return d
 end
 
@@ -79,19 +75,7 @@ MadNLP.improve!(M::TBDSolver) = false
 #TODO introduce
 MadNLP.introduce(M::TBDSolver) = "TBDSolver"
 
-# # Extracts x_list_gpu from x_gpu using unsafe_wrap
-# function extract_x_list!(x_gpu::CUDA.CuVector{T}, x_list_gpu::Vector{CuMatrix{T}}, N::Int, n::Int) where T
-
-#    # Get the raw pointer to the full vector data
-#    x_ptr = pointer(x_gpu)
-   
-#    for i in 1:N
-#        x_list_gpu[i] = unsafe_wrap(CuMatrix{T}, x_ptr + n *(i-1) * sizeof(T), (n, 1); 
-#                                own=false)
-#    end
-# end
-
-function detect_spaces_and_divide_csc(csc_matrix::CUSPARSE.CuSparseMatrixCSC{T, Int32}) where T
+function detect_spaces_and_divide_csc(csc_matrix::CUSPARSE.CuSparseMatrixCSC{T}) where T
     # Get matrix dimensions
     num_rows, num_cols = size(csc_matrix, 1), size(csc_matrix, 2)
     
@@ -132,4 +116,99 @@ function detect_spaces_and_divide_csc(csc_matrix::CUSPARSE.CuSparseMatrixCSC{T, 
     
     # Return number of blocks and block size (ensuring result is at least 1)
     return num_rows ÷ max(1, result), max(1, result)
+end
+
+function fill_block_vecs!(
+    A_tril_csc::CUSPARSE.CuSparseMatrixCSC{T},
+    block_vecs::CuArray{T},
+    N::Int,
+    n::Int
+) where T
+    # Convert GPU sparse matrix to CPU for extraction
+    A_cpu = SparseMatrixCSC(A_tril_csc)
+    S = size(A_cpu, 1)
+    
+    offset = 0
+
+    for k = 0:N-1
+        row_start = k * n + 1
+        row_end   = min((k + 1) * n, S)
+        row_size  = row_end - row_start + 1
+        col_start = row_start
+
+        # Extract and symmetrize A_k (on CPU)
+        Ak_cpu = zeros(Float32, n, n)
+        
+        # For each column in the block
+        for col_idx = 1:n
+            col = col_start + col_idx - 1
+            if col > row_end
+                break
+            end
+            
+            # For each row in this column (from the sparse representation)
+            for ptr = A_cpu.colptr[col]:A_cpu.colptr[col+1]-1
+                row = A_cpu.rowval[ptr]
+                val = A_cpu.nzval[ptr]
+                
+                # If the row is within our current block's range
+                if row >= row_start && row <= row_end
+                    i = row - row_start + 1
+                    j = col_idx
+                    
+                    # Set both (i,j) and (j,i) for symmetry
+                    Ak_cpu[i, j] = val
+                    if i != j  # Avoid setting diagonal twice
+                        Ak_cpu[j, i] = val
+                    end
+                end
+            end
+        end
+
+        # If last diagonal block is smaller, pad with identity
+        if row_size < n && k == N-1
+            for i = row_size+1:n
+                Ak_cpu[i, i] = 1.0f0
+            end
+        end
+
+        # Transfer complete block to GPU and update block_vecs
+        Ak_gpu = CuArray(Ak_cpu)
+        block_vecs[offset+1 : offset+n^2] .= reshape(Ak_gpu, :, 1)
+        offset += n^2
+
+        # B_k (off-diagonal)
+        if k < N - 1
+            Bk_cpu = zeros(Float32, n, n)
+
+            r_start = (k+1) * n + 1
+            r_end   = min((k+2) * n, S)
+            c_start = k * n + 1
+            c_end   = min((k+1) * n, S)
+
+            # More explicit iteration for clarity
+            for col_idx = 1:n
+                col = c_start + col_idx - 1
+                if col > c_end
+                    break
+                end
+                
+                for ptr = A_cpu.colptr[col]:A_cpu.colptr[col+1]-1
+                    row = A_cpu.rowval[ptr]
+                    val = A_cpu.nzval[ptr]
+                    
+                    if row >= r_start && row <= r_end
+                        i = col_idx
+                        j = row - r_start + 1
+                        Bk_cpu[i, j] = val
+                    end
+                end
+            end
+
+            # Transfer complete block to GPU and update block_vecs
+            Bk_gpu = CuArray(Bk_cpu)
+            block_vecs[offset+1 : offset+n^2] .= reshape(Bk_gpu, :, 1)
+            offset += n^2
+        end
+    end
 end
