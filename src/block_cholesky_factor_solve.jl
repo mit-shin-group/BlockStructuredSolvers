@@ -1,7 +1,7 @@
 struct BlockTriDiagData{
     T, 
     MT <: AbstractMatrix{T},
-    VMT :: Vector{MT}
+    VMT <: Vector{MT}
     }
 
     N::Int
@@ -180,7 +180,7 @@ function factorize!(data::BlockTriDiagData)
     end
 end
 
-function solve!(data::BlockTriDiagData, d_list::Vector{MT}) where {MT<:AbstractMatrix{T}}
+function solve!(data::BlockTriDiagData, d_list::Vector{<:AbstractMatrix{T}}) where {T}
 
     P = data.P
     n = data.n
@@ -218,7 +218,7 @@ function solve!(data::BlockTriDiagData, d_list::Vector{MT}) where {MT<:AbstractM
     return nothing
 end
 
-function solve!(data::BlockTriDiagData, d<:AbstractMatrix{T})
+function solve!(data::BlockTriDiagData, d::AbstractMatrix{T}) where {T}
 
     P = data.P
     n = data.n
