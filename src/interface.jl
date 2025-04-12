@@ -98,10 +98,10 @@ function detect_spaces_and_divide_csc(csc_matrix::CUSPARSE.CuSparseMatrixCSC{T})
     end
     
     # Estimate block size
-    result = max_span ÷ 3 * 2
+    result = ceil(max_span * 2 / 3)
     
     # Return number of blocks and block size (ensuring result is at least 1)
-    return num_rows ÷ max(1, result), max(1, result)
+    return ceil(Int, num_rows / max(1, result)), max(1, result)
 end
 
 function extract_A_B_lists!(
@@ -147,7 +147,7 @@ function extract_A_B_lists!(
 
         if row_size < n && k == N-1
             for i = row_size+1:n
-                Ak_cpu[i, i] = one(T)
+                Ak_cpu[i, i] = one(T) * n
             end
         end
 
@@ -227,7 +227,7 @@ function extract_A_B_lists!(
 
         if row_size < n && k == N-1
             for i = row_size+1:n
-                Ak[i, i] = one(T)
+                Ak[i, i] = one(T) * n
             end
         end
 
