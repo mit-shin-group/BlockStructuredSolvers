@@ -103,9 +103,8 @@ function initialize(N::Int, n::Int, T::Type, use_GPU::Bool)
         I_separator = I_separator_list[i]
 
         LHS_vec = MT(zeros((2*N-1)*n^2, 1))
-        A_list = [MT(Matrix{T}(I, n, n)) for i in 1:N];
+        A_list = [MT(zeros(n, n)) for i in 1:N];
         B_list = [MT(zeros(n, n)) for i in 1:N-1];
-        extract_AB_list!(LHS_vec, A_list, B_list, N, n)
 
         d = MT(zeros(N *n, 1))
         d_list = [MT(zeros(n, 1)) for i in 1:N];
@@ -148,6 +147,12 @@ function initialize(N::Int, n::Int, T::Type, use_GPU::Bool)
 
 end
 
+function set_zero!(matrices::Vector{<:AbstractMatrix})
+    for matrix in matrices
+        fill!(matrix, 0.0)
+    end
+end
+
 function factorize!(data::BlockTriDiagData)
     P = data.P
     n = data.n
@@ -161,6 +166,13 @@ function factorize!(data::BlockTriDiagData)
     M_2n_list = data.M_2n_list
     factor_list_temp = data.factor_list_temp
     temp_B_list = data.temp_B_list
+
+    set_zero!(LHS_A_list)
+    set_zero!(LHS_B_list)
+    set_zero!(factor_list)
+    set_zero!(factor_list_temp)
+    set_zero!(M_2n_list)
+    set_zero!(temp_B_list)
 
     # Copy data for factorization
     copy_vector_of_arrays!(view(temp_B_list, 1:2:2*(P-1)), view(B_list, I_separator[1:P-1]))

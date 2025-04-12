@@ -1,5 +1,3 @@
-using DelimitedFiles
-
 @kwdef mutable struct TBDSolverOptions <: MadNLP.AbstractOptions
     #TODO add ordering
 end
@@ -7,10 +5,6 @@ end
 mutable struct TBDSolver{T} <: MadNLP.AbstractLinearSolver{T}
     inner::Union{Nothing, BlockTriDiagData}
     tril::CUSPARSE.CuSparseMatrixCSC{T}
-    
-    # not used
-    x_gpu::CUDA.CuVector{T}
-    b_gpu::CUDA.CuVector{T}
 
     opt::MadNLP.AbstractOptions
     logger::MadNLP.MadNLPLogger
@@ -28,28 +22,20 @@ function TBDSolver(
     # N = 50
     # n = 2
     solver = initialize(N, n, eltype(csc), true)
-    
-    # Create full vector but never used
-    x_gpu = CUDA.zeros(T, N*n)
-    b_gpu = CUDA.zeros(T, N*n)
 
-    return TBDSolver(solver, csc, x_gpu, b_gpu, opt, logger)
+    return TBDSolver(solver, csc, opt, logger)
 end
 
 function MadNLP.factorize!(solver::TBDSolver{T}) where T
 
-    fill!(solver.inner.LHS_vec, 0)
-    fill_block_vecs!(solver.tril, solver.inner.LHS_vec, solver.inner.N, solver.inner.n)
+    extract_A_B_lists!(solver.inner.A_list, solver.inner.B_list, solver.tril, solver.inner.N, solver.inner.n)
     BlockStructuredSolvers.factorize!(solver.inner)
     return solver
 end
 
 function MadNLP.solve!(solver::TBDSolver{T}, d) where T
 
-    fill!(solver.inner.d, 0)
-    println("d = ", CUDA.norm(solver.inner.d))
     copyto!(solver.inner.d, d)
-    println("d = ", CUDA.norm(solver.inner.d))
     BlockStructuredSolvers.solve!(solver.inner, solver.inner.d_list)
     copyto!(d, view(solver.inner.d, 1:length(d)))
 
@@ -118,17 +104,16 @@ function detect_spaces_and_divide_csc(csc_matrix::CUSPARSE.CuSparseMatrixCSC{T})
     return num_rows ÷ max(1, result), max(1, result)
 end
 
-function fill_block_vecs!(
+function extract_A_B_lists!(
+    A_list::Vector{<:CuMatrix{T}},
+    B_list::Vector{<:CuMatrix{T}},
     A_tril_csc::CUSPARSE.CuSparseMatrixCSC{T},
-    block_vecs::CuArray{T},
     N::Int,
     n::Int
 ) where T
-    # Convert GPU sparse matrix to CPU for extraction
+    # Convert sparse matrix to CPU
     A_cpu = SparseMatrixCSC(A_tril_csc)
     S = size(A_cpu, 1)
-    
-    offset = 0
 
     for k = 0:N-1
         row_start = k * n + 1
@@ -136,67 +121,57 @@ function fill_block_vecs!(
         row_size  = row_end - row_start + 1
         col_start = row_start
 
-        # Extract and symmetrize A_k (on CPU)
-        Ak_cpu = zeros(Float32, n, n)
-        
-        # For each column in the block
+        # Diagonal block A_k (on CPU)
+        Ak_cpu = zeros(T, n, n)
+
         for col_idx = 1:n
             col = col_start + col_idx - 1
             if col > row_end
                 break
             end
-            
-            # For each row in this column (from the sparse representation)
+
             for ptr = A_cpu.colptr[col]:A_cpu.colptr[col+1]-1
                 row = A_cpu.rowval[ptr]
                 val = A_cpu.nzval[ptr]
-                
-                # If the row is within our current block's range
+
                 if row >= row_start && row <= row_end
                     i = row - row_start + 1
                     j = col_idx
-                    
-                    # Set both (i,j) and (j,i) for symmetry
                     Ak_cpu[i, j] = val
-                    if i != j  # Avoid setting diagonal twice
+                    if i != j
                         Ak_cpu[j, i] = val
                     end
                 end
             end
         end
 
-        # If last diagonal block is smaller, pad with identity
         if row_size < n && k == N-1
             for i = row_size+1:n
-                Ak_cpu[i, i] = 1.0f0
+                Ak_cpu[i, i] = one(T)
             end
         end
 
-        # Transfer complete block to GPU and update block_vecs
-        Ak_gpu = CuArray(Ak_cpu)
-        block_vecs[offset+1 : offset+n^2] .= reshape(Ak_gpu, :, 1)
-        offset += n^2
+        copyto!(A_list[k+1], Ak_cpu)  # copy from CPU block into GPU memory
 
-        # B_k (off-diagonal)
+        # Off-diagonal block B_k
         if k < N - 1
-            Bk_cpu = zeros(Float32, n, n)
+            Bk_cpu = zeros(T, n, n)
 
             r_start = (k+1) * n + 1
             r_end   = min((k+2) * n, S)
             c_start = k * n + 1
             c_end   = min((k+1) * n, S)
 
-            # More explicit iteration for clarity
             for col_idx = 1:n
                 col = c_start + col_idx - 1
                 if col > c_end
                     break
                 end
-                
+
                 for ptr = A_cpu.colptr[col]:A_cpu.colptr[col+1]-1
                     row = A_cpu.rowval[ptr]
                     val = A_cpu.nzval[ptr]
-                    
+
                     if row >= r_start && row <= r_end
                         i = col_idx
                         j = row - r_start + 1
@@ -205,10 +180,84 @@ function fill_block_vecs!(
                 end
             end
 
-            # Transfer complete block to GPU and update block_vecs
-            Bk_gpu = CuArray(Bk_cpu)
-            block_vecs[offset+1 : offset+n^2] .= reshape(Bk_gpu, :, 1)
-            offset += n^2
+            copyto!(B_list[k+1], Bk_cpu)  # copy from CPU to GPU
+        end
+    end
+end
+
+
+function extract_A_B_lists!(
+    A_list::Vector{<:AbstractMatrix{T}},
+    B_list::Vector{<:AbstractMatrix{T}},
+    A_tril_csc::SparseMatrixCSC{T},
+    N::Int,
+    n::Int
+) where T
+    S = size(A_tril_csc, 1)
+
+    for k = 0:N-1
+        row_start = k * n + 1
+        row_end   = min((k + 1) * n, S)
+        row_size  = row_end - row_start + 1
+        col_start = row_start
+
+        Ak = A_list[k+1]
+        fill!(Ak, zero(T))
+
+        for col_idx = 1:n
+            col = col_start + col_idx - 1
+            if col > row_end
+                break
+            end
+
+            for ptr = A_tril_csc.colptr[col]:A_tril_csc.colptr[col+1]-1
+                row = A_tril_csc.rowval[ptr]
+                val = A_tril_csc.nzval[ptr]
+
+                if row >= row_start && row <= row_end
+                    i = row - row_start + 1
+                    j = col_idx
+                    Ak[i, j] = val
+                    if i != j
+                        Ak[j, i] = val
+                    end
+                end
+            end
+        end
+
+        if row_size < n && k == N-1
+            for i = row_size+1:n
+                Ak[i, i] = one(T)
+            end
+        end
+
+        # Off-diagonal block B_k
+        if k < N - 1
+            Bk = B_list[k+1]
+            fill!(Bk, zero(T))
+
+            r_start = (k+1) * n + 1
+            r_end   = min((k+2) * n, S)
+            c_start = k * n + 1
+            c_end   = min((k+1) * n, S)
+
+            for col_idx = 1:n
+                col = c_start + col_idx - 1
+                if col > c_end
+                    break
+                end
+
+                for ptr = A_tril_csc.colptr[col]:A_tril_csc.colptr[col+1]-1
+                    row = A_tril_csc.rowval[ptr]
+                    val = A_tril_csc.nzval[ptr]
+
+                    if row >= r_start && row <= r_end
+                        i = col_idx
+                        j = row - r_start + 1
+                        Bk[i, j] = val
+                    end
+                end
+            end
         end
     end
 end
