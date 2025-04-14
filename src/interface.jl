@@ -1,3 +1,6 @@
+using MadNLP
+using CUDA
+
 @kwdef mutable struct TBDSolverOptions <: MadNLP.AbstractOptions
     #TODO add ordering
 end
@@ -98,7 +101,7 @@ function detect_spaces_and_divide_csc(csc_matrix::CUSPARSE.CuSparseMatrixCSC{T})
     end
     
     # Estimate block size
-    result = ceil(max_span * 2 / 3)
+    result = ceil(Int, max_span * 2 / 3)
     
     # Return number of blocks and block size (ensuring result is at least 1)
     return ceil(Int, num_rows / max(1, result)), max(1, result)
