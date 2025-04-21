@@ -1,5 +1,10 @@
+module MadNLPInterface
+
 using MadNLP
-using CUDA
+import CUDA: CuMatrix, CuArray
+import CUDA.CUSPARSE: CuSparseMatrixCSC
+import BlockStructuredSolvers: BlockTriDiagData, factorize!, solve!
+import SparseArrays: SparseMatrixCSC
 
 @kwdef mutable struct TBDSolverOptions <: MadNLP.AbstractOptions
     #TODO add ordering
@@ -7,14 +12,14 @@ end
 
 mutable struct TBDSolver{T} <: MadNLP.AbstractLinearSolver{T}
     inner::Union{Nothing, BlockTriDiagData}
-    tril::CUSPARSE.CuSparseMatrixCSC{T}
+    tril::CuSparseMatrixCSC{T}
 
     opt::MadNLP.AbstractOptions
     logger::MadNLP.MadNLPLogger
 end
 
 function TBDSolver(
-    csc::CUSPARSE.CuSparseMatrixCSC{T};
+    csc::CuSparseMatrixCSC{T};
     opt=TBDSolverOptions(),
     logger=MadNLP.MadNLPLogger(),
     ) where T
@@ -32,14 +37,14 @@ end
 function MadNLP.factorize!(solver::TBDSolver{T}) where T
 
     extract_A_B_lists!(solver.inner.A_list, solver.inner.B_list, solver.tril, solver.inner.N, solver.inner.n)
-    BlockStructuredSolvers.factorize!(solver.inner)
+    factorize!(solver.inner)
     return solver
 end
 
 function MadNLP.solve!(solver::TBDSolver{T}, d) where T
 
     copyto!(solver.inner.d, d)
-    BlockStructuredSolvers.solve!(solver.inner, solver.inner.d_list)
+    solve!(solver.inner, solver.inner.d_list)
     copyto!(d, view(solver.inner.d, 1:length(d)))
 
     return d
@@ -64,7 +69,7 @@ MadNLP.improve!(M::TBDSolver) = false
 #TODO introduce
 MadNLP.introduce(M::TBDSolver) = "TBDSolver"
 
-function detect_spaces_and_divide_csc(csc_matrix::CUSPARSE.CuSparseMatrixCSC{T}) where T
+function detect_spaces_and_divide_csc(csc_matrix::CuSparseMatrixCSC{T}) where T
     # Get matrix dimensions
     num_rows, num_cols = size(csc_matrix, 1), size(csc_matrix, 2)
     
@@ -110,7 +115,7 @@ end
 function extract_A_B_lists!(
     A_list::Vector{<:CuMatrix{T}},
     B_list::Vector{<:CuMatrix{T}},
-    A_tril_csc::CUSPARSE.CuSparseMatrixCSC{T},
+    A_tril_csc::CuSparseMatrixCSC{T},
     N::Int,
     n::Int
 ) where T
@@ -263,4 +268,6 @@ function extract_A_B_lists!(
             end
         end
     end
+end
+
 end

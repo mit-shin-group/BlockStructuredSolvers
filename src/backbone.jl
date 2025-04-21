@@ -130,6 +130,7 @@ function compute_schur_complement!(A_list::Vector{<:CuMatrix}, B_list::Vector{<:
     # Solve using Cholesky factors
     cholesky_solve_batched!(view(A_list, 2:I_separator[P-1]), view(B_list, 2:I_separator[P-1]), view(factor_list, 2:I_separator[P-1]), m+1)
 
+    # last partition
     cholesky_solve!(view(A_list, I_separator[P-1]+1:I_separator[P]), view(B_list, I_separator[P-1]+1:I_separator[P]-1), view(factor_list, I_separator[P-1]+1:I_separator[P]), I_separator[P]-I_separator[P-1]-1)
 
     # Compute Schur complement
@@ -137,6 +138,7 @@ function compute_schur_complement!(A_list::Vector{<:CuMatrix}, B_list::Vector{<:
         gemm_batched!('T', 'N', 1.0, factor_list_temp[j:(m+1):I_separator[P-1]], factor_list[j:(m+1):I_separator[P-1]], 1.0, M_2n_list[1:P-2])
     end
 
+    # last partition
     for j = I_separator[P-1]+1:I_separator[P]-1
         mygemm!('T', 'N', 1.0, factor_list_temp[j], factor_list[j], 1.0, M_2n_list[P-1])
     end

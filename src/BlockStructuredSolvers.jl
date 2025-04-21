@@ -25,7 +25,6 @@ import SparseArrays: SparseMatrixCSC
 export _bss_norm
 export BlockTriDiagData, initialize, factorize!, solve!
 export copy_vector_of_arrays!
-# export construct_block_tridiagonal, generate_data, detect_block_tridiagonal, detect_spaces_and_divide_csc
 export TBDSolver
 
 # Include files
@@ -33,6 +32,6 @@ include("myBLAS.jl")
 include("backbone.jl")
 include("block_cholesky_factor_solve.jl")
 include("sequential_cholesky_factor_solve.jl")
-include("interface.jl")
+include("MadNLPInterface.jl")
 
 end
