@@ -25,13 +25,11 @@ import SparseArrays: SparseMatrixCSC
 export _bss_norm
 export BlockTriDiagData, initialize, factorize!, solve!
 export copy_vector_of_arrays!
-export TBDSolver
 
 # Include files
 include("myBLAS.jl")
 include("backbone.jl")
 include("block_cholesky_factor_solve.jl")
 include("sequential_cholesky_factor_solve.jl")
-include("MadNLPInterface.jl")
 
 end
