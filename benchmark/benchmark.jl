@@ -17,22 +17,12 @@ using Printf, ProgressBars, Statistics
 
 println(LinearAlgebra.BLAS.get_config())
 
+N = 100
 n = 32 # size of each block
-m = 2 # number of blocks between separators
-P_last = 3 # number of separators
-level = 4; # number of nested level
-N_last = P_last * (m + 1) - m; # number of diagonal blocks
 seed = 42 # random seed for reproducibility
 
-function run(m, n, P_start, level)
-    # Calculate N based on levels
-    P = P_start
-    N = P * (m + 1) - m
-    for i = 2:level
-        P = N
-        N = P * (m + 1) - m
-    end
-    
+function run(N, n)
+
     A_list, B_list, x_list, x, d_list = generate_data(N, n)
     A_list_gpu, B_list_gpu, x_list_gpu, x_gpu, d_list_gpu = to_gpu(A_list, B_list, x_list, x, d_list)
     BigMatrix, d = construct_block_tridiagonal(A_list, B_list, d_list)
@@ -70,8 +60,8 @@ function run(m, n, P_start, level)
     chol = nothing
 
     # Warmup factorization
-    data = initialize(P_start * (m + 1) - m, m, n, P_start, A_list, B_list, level)
-    data_gpu = initialize(P_start * (m + 1) - m, m, n, P_start, A_list_gpu, B_list_gpu, level)
+    data = initialize(N, n, A_list, B_list, true)
+    data_gpu = initialize(N, n, A_list_gpu, B_list_gpu, true)
     data_sequential = initialize(N, n, A_list, B_list)
     cpu_factorize_time = @elapsed factorize!(data)
     cpu_solve_time = @elapsed solve!(data, d_list, x)
@@ -127,22 +117,15 @@ function benchmark_factorization_and_solve(iter)
 
     println("Starting warmup...")
 
-    _ = run(2, 10, 3, 1)
+    _ = run(20, 32)
 
-    (m, n, P_start, level) = (33, 128, 33, 1) #(4, 200, 3, 4)
-
-    P = P_start
-    N = P * (m + 1) - m
-    for i = 2:level
-        P = N
-        N = P * (m + 1) - m
-    end
+    (N, n) = (100, 256)
 
     println("Starting benchmark...")
 
     for i = tqdm(1:iter)
 
-        results = run(m, n, P_start, level)
+        results = run(N, n)
 
         push!(ma57_factor_times, results[1])
         push!(ma57_solve_times, results[2])
@@ -167,7 +150,7 @@ function benchmark_factorization_and_solve(iter)
     end
 
     # Compute and print the average times
-    println("\nAverage Factorization and Solve Times over ", iter, " Runs:", " N: $N, n: $n, P: $P, m: $m, level: $level")
+    println("\nAverage Factorization and Solve Times over ", iter, " Runs:", " N: $N, n: $n")
     println("---------------------------------------------------")
     @printf("MA57 - Factorize: %.6f ms, Solve: %.6f ms\n", mean(ma57_factor_times) * 1000, mean(ma57_solve_times) * 1000)
     @printf("CHOLMOD - Factorize: %.6f ms, Solve: %.6f ms\n", mean(chol_factor_times) * 1000, mean(chol_solve_times) * 1000)

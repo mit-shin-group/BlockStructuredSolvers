@@ -1,16 +1,6 @@
 @testset "Block cholesky factor" begin
+    N = 100
     n = 100 # size of each block
-    m = 2 # number of blocks between separators
-    P_start = 3 # number of separators
-    level = 3
-
-    # Calculate N based on levels
-    P = P_start
-    N = P * (m + 1) - m
-    for i = 2:level
-        P = N
-        N = P * (m + 1) - m
-    end
 
     # Run 3 times
     for run in 1:3
@@ -43,37 +33,31 @@
         end
         d_list[N] = B_list[N-1]' * x_list[N-1] + A_list[N] * x_list[N]
 
+        eps_norm = _bss_norm(d_list)
+
         #################################################
 
         ϵ = sqrt(eps(eltype(A_list[1])));
 
-        data = initialize(P_start * (m + 1) - m, m, n, P_start, A_list, B_list, level);
+        data = initialize(N, n, eltype(A_list[1]), false);
+        copy_vector_of_arrays!(data.A_list, A_list)
+        copy_vector_of_arrays!(data.B_list, B_list)
 
         GC.gc()
         println("  Factorization:")
         @time factorize!(data)
         
         println("  Solve:")
-        @time solve!(data, d_list, x)
+        @time solve!(data, d_list)
 
-        @test _bss_norm(x - x_list) ≤ ϵ * _bss_norm(d_list)
+        @test _bss_norm(d_list - x_list) ≤ ϵ * eps_norm
     end
 end
 
 if @isdefined(cuda_enabled) && cuda_enabled
     @testset "Block cholesky factor (CUDA)" begin
+        N = 100
         n = 100 # size of each block
-        m = 2 # number of blocks between separators
-        P_start = 3 # number of separators
-        level = 3
-
-        # Calculate N based on levels
-        P = P_start
-        N = P * (m + 1) - m
-        for i = 2:level
-            P = N
-            N = P * (m + 1) - m
-        end
 
         # Run 3 times
         for run in 1:3
@@ -106,20 +90,24 @@ if @isdefined(cuda_enabled) && cuda_enabled
             end
             d_list[N] = B_list[N-1]' * x_list[N-1] + A_list[N] * x_list[N]
 
+            eps_norm = _bss_norm(d_list)
+
             #################################################
 
             ϵ = sqrt(eps(eltype(A_list[1])));
 
-            data = initialize(P_start * (m + 1) - m, m, n, P_start, A_list, B_list, level);
+            data = initialize(N, n, eltype(A_list[1]), true);
+            copy_vector_of_arrays!(data.A_list, A_list)
+            copy_vector_of_arrays!(data.B_list, B_list)
 
             GC.gc()
             println("  Factorization:")
             @time factorize!(data)
             
             println("  Solve:")
-            @time solve!(data, d_list, x)
+            @time solve!(data, d_list)
 
-            @test _bss_norm(x - x_list) ≤ ϵ * _bss_norm(d_list)
+            @test _bss_norm(d_list - x_list) ≤ ϵ * eps_norm
         end
     end
 else

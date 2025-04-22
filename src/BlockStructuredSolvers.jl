@@ -5,6 +5,7 @@ import LinearAlgebra.BLAS: gemm! as lagemm!
 import LinearAlgebra.BLAS: trsm! as latrsm!
 import LinearAlgebra.LAPACK: potrf! as lapotrf!
 import LinearAlgebra: norm as lanorm
+import LinearAlgebra: I
 
 # GPU BLAS/LAPACK operations #TODO move CUDA as weakdep
 import CUDA.CUBLAS: gemm! as cugemm!
@@ -22,14 +23,13 @@ import SparseArrays: SparseMatrixCSC
 
 # Export functions
 export _bss_norm
-export initialize, factorize!, solve!
-export construct_block_tridiagonal, generate_data, detect_block_tridiagonal, detect_spaces_and_divide_csc
+export BlockTriDiagData, initialize, factorize!, solve!
+export copy_vector_of_arrays!
 
 # Include files
 include("myBLAS.jl")
 include("backbone.jl")
 include("block_cholesky_factor_solve.jl")
 include("sequential_cholesky_factor_solve.jl")
-include("interface.jl")
 
 end
