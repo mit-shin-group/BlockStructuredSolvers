@@ -11,7 +11,10 @@ struct BlockTriDiagData{
 
     I_separator::Vector{Int}
 
-    LHS_vec::MT
+    A_vec::MT
+    A_fill::MT
+    B_vec::MT
+
     A_list::VMT
     B_list::VMT
 
@@ -32,17 +35,18 @@ struct BlockTriDiagData{
 
 end
 
-function extract_AB_list!(LHS_vec::MT, A_list::Vector{MT}, B_list::Vector{MT}, N::Int, n::Int) where {T, MT<:AbstractMatrix{T}}
+function extract_AB_list!(A_vec::MT, B_vec::MT, A_list::Vector{MT}, B_list::Vector{MT}, N::Int, n::Int) where {T, MT<:AbstractMatrix{T}}
 
-    LHS_vec_ptr = pointer(LHS_vec)
+    A_vec_ptr = pointer(A_vec)
+    B_vec_ptr = pointer(B_vec)
 
     for i in 1:N-1
 
-        A_list[i] = unsafe_wrap(MT, LHS_vec_ptr + 2*n^2*(i-1)*sizeof(T), (n, n); own=false)
-        B_list[i] = unsafe_wrap(MT, LHS_vec_ptr + 2*n^2*(i-1)*sizeof(T) + n^2*sizeof(T), (n, n); own=false)
+        A_list[i] = unsafe_wrap(MT, A_vec_ptr + n^2*(i-1)*sizeof(T), (n, n); own=false)
+        B_list[i] = unsafe_wrap(MT, B_vec_ptr + n^2*(i-1)*sizeof(T), (n, n); own=false)
     end
 
-    A_list[N] = unsafe_wrap(MT, LHS_vec_ptr + 2*n^2*(N-1)*sizeof(T), (n, n); own=false)
+    A_list[N] = unsafe_wrap(MT, A_vec_ptr + n^2*(N-1)*sizeof(T), (n, n); own=false)
 
 end
 
@@ -102,9 +106,14 @@ function initialize(N::Int, n::Int, T::Type, use_GPU::Bool)
        
         I_separator = I_separator_list[i]
 
-        LHS_vec = MT(zeros((2*N-1)*n^2, 1))
+        A_vec = MT(zeros(N*n^2, 1))
+        A_fill = MT(zeros(N*n^2, 1))
+        B_vec = MT(zeros((N-1)*n^2, 1))
         A_list = [MT(zeros(n, n)) for i in 1:N];
         B_list = [MT(zeros(n, n)) for i in 1:N-1];
+        extract_AB_list!(A_vec, B_vec, A_list, B_list, N, n)
+        copyto!(A_list[end], MT(I(n)))
+        A_fill .= A_vec #TODO may not need this
 
         d = MT(zeros(N *n, 1))
         d_list = [MT(zeros(n, 1)) for i in 1:N];
@@ -126,7 +135,9 @@ function initialize(N::Int, n::Int, T::Type, use_GPU::Bool)
             n, 
             P, 
             I_separator,
-            LHS_vec,
+            A_vec,
+            A_fill,
+            B_vec,
             A_list, 
             B_list,
             d,
