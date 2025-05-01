@@ -14,12 +14,13 @@ import CUDA.CUSOLVER: potrf! as cupotrf!
 import CUDA: norm as cunorm
 
 # CUDA types
-import CUDA: StridedCuMatrix, CuMatrix, CuArray
+import CUDA: StridedCuMatrix, CuMatrix, CuArray, zeros
 import CUDA.CUBLAS: gemm_batched!, trsm_batched! 
-import CUDA.CUSOLVER: potrfBatched!
+import CUDA.CUSOLVER: potrfBatched!, unchecked_cusolverDnDpotrfBatched
 
 # SparseArrays
 import SparseArrays: SparseMatrixCSC
+using CUDA
 
 # Export functions
 export _bss_norm

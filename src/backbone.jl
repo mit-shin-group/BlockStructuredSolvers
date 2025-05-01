@@ -28,18 +28,60 @@ function cholesky_solve!(M_chol_A_list, M_chol_B_list, d_list::M, N) where {T, M
 
 end
 
-function cholesky_factorize_batched!(A_list, B_list, m)
+function cholesky_factorize_batched!(A_list::AbstractVector{<:CuMatrix{T}},
+    B_list::AbstractVector{<:CuMatrix{T}},
+    m::Integer) where {T<:Union{Float32,Float64}}
 
-    potrfBatched!('U', A_list[1:m:end])
+    # ---- one info buffer and one cuSOLVER handle ---------------------------
+    batches     = length(A_list[1:m:end])
+    info_array  = CUDA.zeros(Int32, batches)
 
-    for i = 2:m-1
+    h_ref = Ref{CUSOLVER.cusolverDnHandle_t}()
+    CUSOLVER.cusolverDnCreate(h_ref)      # make a handle once
+    handle = h_ref[]
 
-        trsm_batched!('L', 'U', 'T', 'N', 1.0, A_list[i-1:m:end], B_list[i-1:m:end])
-        gemm_batched!('T', 'N', -1.0, B_list[i-1:m:end], B_list[i-1:m:end], 1.0, A_list[i:m:end])
-        potrfBatched!('U', A_list[i:m:end])
+    # ---- first block row ----------------------------------------------------
+    CUSOLVER.potrfBatched!('U', A_list[1:m:end])
 
+    # ---- remaining block rows ----------------------------------------------
+    for i in 2:m-1
+        diag_prev = A_list[i-1:m:end]
+        off_prev  = B_list[i-1:m:end]
+        diag_cur  = A_list[i:m:end]
+
+        # Bᵢ ← Uᵢ₋₁⁻ᵀ · Bᵢ
+        CUBLAS.trsm_batched!('L','U','T','N', one(T),
+        diag_prev, off_prev)
+
+        # Aᵢ ← Aᵢ − Bᵢᵀ Bᵢ
+        CUBLAS.gemm_batched!('T','N',
+        -one(T), off_prev, off_prev,
+        one(T),  diag_cur)
+
+        # raw batched Cholesky on the updated diagonal block
+        Aptrs = CUBLAS.unsafe_batch(diag_cur)   # CuVector{Ptr{T}}
+        n     = size(diag_cur[1], 1)
+        bsz   = length(diag_cur)
+
+        if T === Float64
+            CUSOLVER.unchecked_cusolverDnDpotrfBatched(
+            handle, CUBLAS.CUBLAS_FILL_MODE_UPPER,
+            n, Aptrs, n, pointer(info_array), bsz)
+        else
+            CUSOLVER.unchecked_cusolverDnSpotrfBatched(
+            handle, CUBLAS.CUBLAS_FILL_MODE_UPPER,
+            n, Aptrs, n, pointer(info_array), bsz)
+        end
+
+        # simple safety check
+        if any(Array(view(info_array, 1:bsz)) .!= 0)
+            error("cuSOLVER potrfBatched failed in block row $i")
+        end
     end
 
+# ---- clean-up -----------------------------------------------------------
+    CUSOLVER.cusolverDnDestroy(handle)
+    return nothing
 end
 
 function cholesky_solve_batched!(A_list, B_list, d_list, m)
