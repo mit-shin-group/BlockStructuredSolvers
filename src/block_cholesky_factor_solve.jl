@@ -125,6 +125,10 @@ function initialize(N::Int, n::Int, T::Type, use_GPU::Bool)
         factor_list = [MT(zeros(n, 2*n)) for j = 1:N];
         temp_list = [MT(zeros(2*n, 1)) for i = 1:P-1];
         temp_B_list = [MT(zeros(n, n)) for i = 1:2*(P-1)];
+        # tetris_list = [MT(zeros(n, n)) for i = 1:(P-1)*m];
+        # tetris_list_2 = [MT(zeros(n, n)) for i = 1:(P-1)];
+        # tetris_list_3 = [MT(zeros(n, 1)) for i = 1:(P-1)];
+        # tetris_list_4 = [MT(zeros(n, 1)) for i = 1:(P-1)];
 
         M_2n_list = [MT(zeros(2*n, 2*n)) for i in 1:P-1];
         factor_list_temp = [MT(zeros(n, 2*n)) for i in 1:N];
@@ -180,10 +184,9 @@ function factorize!(data::BlockTriDiagData)
 
     set_zero!(LHS_A_list)
     set_zero!(LHS_B_list)
-    set_zero!(factor_list)
-    set_zero!(factor_list_temp)
-    set_zero!(M_2n_list)
-    set_zero!(temp_B_list)
+    # set_zero!(factor_list)
+    # set_zero!(factor_list_temp)
+    # set_zero!(temp_B_list)
 
     # Copy data for factorization
     copy_vector_of_arrays!(view(temp_B_list, 1:2:2*(P-1)), view(B_list, I_separator[1:P-1]))

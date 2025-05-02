@@ -15,7 +15,7 @@ import CUDA: norm as cunorm
 
 # CUDA types
 import CUDA: StridedCuMatrix, CuMatrix, CuArray, zeros
-import CUDA.CUBLAS: gemm_batched!, trsm_batched! 
+import CUDA.CUBLAS: gemm_batched!, trsm_batched!, cublasDgemmBatched
 import CUDA.CUSOLVER: potrfBatched!, unchecked_cusolverDnDpotrfBatched
 
 # SparseArrays
