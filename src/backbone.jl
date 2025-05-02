@@ -174,7 +174,7 @@ end
 
 function compute_schur_complement!(A_list::Vector{<:CuMatrix{T}}, B_list::Vector{<:CuMatrix{T}}, LHS_A_list, LHS_B_list, temp_B_list, factor_list, factor_list_temp, M_2n_list, I_separator, P, m, n) where {T<:Union{Float32,Float64}}
     
-    bsz = length(A_list[1:m+1:end])
+    bsz = length(A_list[2:m+1:end])
 
     # Perform Cholesky factorization
     cholesky_factorize_batched!(A_list[2:I_separator[P]], B_list[2:I_separator[P]-1], m+1)
@@ -198,20 +198,26 @@ function compute_schur_complement!(A_list::Vector{<:CuMatrix{T}}, B_list::Vector
     # cholesky_solve!(view(A_list, I_separator[P-1]+1:I_separator[P]), view(B_list, I_separator[P-1]+1:I_separator[P]-1), view(factor_list, I_separator[P-1]+1:I_separator[P]), I_separator[P]-I_separator[P-1]-1)
 
     # Compute Schur complement
-    # factor_ptrs = CUBLAS.unsafe_batch(factor_list)
-    # factor_ptrs_temp = CUBLAS.unsafe_batch(factor_list_temp)
-    # M_2n_ptrs = CUBLAS.unsafe_batch(M_2n_list)
-    # println(typeof(M_2n_ptrs))
-    # println(n)
-    gemm_batched!('T', 'N', 1.0, factor_list_temp[2:(m+1):I_separator[P]-1], factor_list[2:(m+1):I_separator[P]-1], 0.0, M_2n_list[1:P-1])
+    factor_ptrs = CUBLAS.unsafe_batch(factor_list)
+    factor_ptrs_temp = CUBLAS.unsafe_batch(factor_list_temp)
+    M_2n_ptrs = CUBLAS.unsafe_batch(M_2n_list)
+
+    # println(size(factor_list_temp[2]))
+    # println(size(factor_list[2]))
+    # gemm_batched!('T', 'N', 1.0, factor_list_temp[2:(m+1):end], factor_list[2:(m+1):end], 0.0, M_2n_list)
+    CUBLAS.cublasDgemmBatched(
+        CUBLAS.handle(), CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_OP_N,
+        2*n, 2*n, n, one(T),
+        factor_ptrs_temp[2:(m+1):I_separator[P]-1], n, factor_ptrs[2:(m+1):I_separator[P]-1], n,
+        zero(T), M_2n_ptrs, 2*n, bsz)
 
     for j = 3:m+1
-        gemm_batched!('T', 'N', 1.0, factor_list_temp[j:(m+1):I_separator[P]-1], factor_list[j:(m+1):I_separator[P]-1], 1.0, M_2n_list[1:P-1])
-        # CUBLAS.cublasDgemmBatched(
-        #     CUBLAS.handle(), CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_OP_N,
-        #     2*n, 2*n, n, one(T),
-        #     factor_ptrs_temp[j:(m+1):I_separator[P]-1], n, factor_ptrs[j:(m+1):I_separator[P]-1], n,
-        #     one(T), M_2n_ptrs[1:P-1], n, bsz)
+        # gemm_batched!('T', 'N', 1.0, factor_list_temp[j:(m+1):end], factor_list[j:(m+1):end], 1.0, M_2n_list)
+        CUBLAS.cublasDgemmBatched(
+            CUBLAS.handle(), CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_OP_N,
+            2*n, 2*n, n, one(T),
+            factor_ptrs_temp[j:(m+1):I_separator[P]-1], n, factor_ptrs[j:(m+1):I_separator[P]-1], n,
+            one(T), M_2n_ptrs, 2*n, bsz)
     end
 
     # last partition
@@ -245,22 +251,25 @@ end
 function compute_schur_rhs!(factor_list::Vector{<:CuMatrix{T}}, d_list, temp_list, I_separator, P, m, n) where {T<:Union{Float32,Float64}}
 
     # println(size(factor_list[1]), size(d_list[1]), size(temp_list[1]))
-    bsz = length(factor_list[1:m+1:end])
+    bsz = length(factor_list[2:m+1:end])
     factor_ptrs = CUBLAS.unsafe_batch(factor_list)
     d_ptrs = CUBLAS.unsafe_batch(d_list)
     temp_ptrs = CUBLAS.unsafe_batch(temp_list)
 
-    gemm_batched!('T', 'N', -1.0, factor_list[2:(m+1):end], d_list[2:(m+1):end], 0.0, temp_list[1:length(factor_list[2:(m+1):end])])
-    # println(CUDA.stride(temp_list[2], 2))
-    # println(size(d_list[2]))
-    # CUBLAS.cublasDgemmBatched(
-    #     CUBLAS.handle(), CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_OP_N,
-    #     2*n, 1, n, -one(T),
-    #     factor_ptrs[2:(m+1):end], n, d_ptrs[2:(m+1):end], n,
-    #     zero(T), temp_ptrs[1:length(factor_list[2:(m+1):end])], n, bsz)
+    # gemm_batched!('T', 'N', -1.0, factor_list[2:(m+1):end], d_list[2:(m+1):end], 0.0, temp_list[1:length(factor_list[2:(m+1):end])])
+    CUBLAS.cublasDgemmBatched(
+        CUBLAS.handle(), CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_OP_N,
+        2*n, 1, n, -one(T),
+        factor_ptrs[2:(m+1):end], n, d_ptrs[2:(m+1):end], n,
+        zero(T), temp_ptrs, 2*n, bsz)
 
     for i = 3:m+1
-        gemm_batched!('T', 'N', -1.0, factor_list[i:(m+1):end], d_list[i:(m+1):end], 1.0, temp_list[1:length(factor_list[i:(m+1):end])])
+        # gemm_batched!('T', 'N', -1.0, factor_list[i:(m+1):end], d_list[i:(m+1):end], 1.0, temp_list[1:length(factor_list[i:(m+1):end])])
+        CUBLAS.cublasDgemmBatched(
+            CUBLAS.handle(), CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_OP_N,
+            2*n, 1, n, -one(T),
+            factor_ptrs[i:(m+1):end], n, d_ptrs[i:(m+1):end], n,
+            one(T), temp_ptrs, 2*n, bsz)
     end
     
     for i = 1:P-1
