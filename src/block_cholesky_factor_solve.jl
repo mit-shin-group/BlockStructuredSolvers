@@ -184,17 +184,33 @@ function factorize!(data::BlockTriDiagData)
 
     set_zero!(LHS_A_list)
     set_zero!(LHS_B_list)
-    # set_zero!(factor_list)
-    # set_zero!(factor_list_temp)
-    # set_zero!(temp_B_list)
 
+    A_ptrs = CUBLAS.unsafe_batch(A_list)
+    B_ptrs = CUBLAS.unsafe_batch(B_list)
+    factor_ptrs = CUBLAS.unsafe_batch(factor_list)
     # Copy data for factorization
     copy_vector_of_arrays!(view(temp_B_list, 1:2:2*(P-1)), view(B_list, I_separator[1:P-1]))
     copy_vector_of_arrays!(view(temp_B_list, 2:2:2*(P-1)), view(B_list, I_separator[2:P].-1))
     add_vector_of_arrays!(LHS_A_list, view(A_list, I_separator))
 
+    @inbounds for i = 1:P-1
+        # Set up M_n_2n_list_! for Schur complement
+        copyto!(view(factor_list_temp[I_separator[i]+1], :, 1:n), temp_B_list[2*(i-1)+1]')
+        copyto!(view(factor_list_temp[I_separator[i+1]-1], :, n+1:2*n), temp_B_list[2*i])
+    end
+
+    copy_vector_of_arrays!(factor_list, factor_list_temp)
+
     # Main factorization loop
-    compute_schur_complement!(A_list, B_list, LHS_A_list, LHS_B_list, temp_B_list, factor_list, factor_list_temp, M_2n_list, I_separator, P, m, n)
+    compute_schur_complement!(A_ptrs, B_ptrs, factor_ptrs, I_separator, P, m, n)
+
+    @inbounds for i = 1:P-1
+        # Update LHS matrices
+        LHS_A_list[i] .-= view(M_2n_list[i], 1:n, 1:n)
+        LHS_A_list[i+1] .-= view(M_2n_list[i], n+1:2*n, n+1:2*n)
+        LHS_B_list[i] .-= view(M_2n_list[i], 1:n, n+1:2*n)
+
+    end
 
     # Recursive factorization
     if isnothing(data.NextData)
@@ -225,6 +241,11 @@ function solve!(data::BlockTriDiagData, d_list::Vector{<:AbstractMatrix{T}}) whe
 
     # Compute RHS from Schur complement
     compute_schur_rhs!(factor_list, d_list, temp_list, I_separator, P, m, n)
+
+    for i = 1:P-1
+        d_list[I_separator[i]] .+= view(temp_list[i], 1:n, :)
+        d_list[I_separator[i+1]] .+= view(temp_list[i], n+1:2*n, :)
+    end
 
     # Solve system
     if isnothing(data.NextData)
