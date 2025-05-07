@@ -12,77 +12,106 @@ end
 
 function cholesky_factorize!(A_ptrs::CuVector{<:CuPtr{T}}, B_ptrs::CuVector{<:CuPtr{T}}, N, n) where {T<:Union{Float32,Float64}}
 
-    CUSOLVER.cusolverDnDpotrf('U', A_list[1]) #TODO Allocation is here
+    dh = CUSOLVER.dense_handle()
+    
+    CUDA.with_workspace(dh.workspace_gpu, bufferSize) do buffer
+        CUSOLVER.cusolverDnDpotrf(dh, CUBLAS.CUBLAS_FILL_MODE_UPPER, n, A_ptrs[1], n,
+            buffer, sizeof(buffer) ÷ sizeof(T), dh.info)
+        for i = 2:N
+            CUBLAS.cublasDtrsm_v2(CUBLAS.handle(), CUBLAS.CUBLAS_SIDE_LEFT, CUBLAS.CUBLAS_FILL_MODE_UPPER,
+                CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_DIAG_NON_UNIT, n, n, 1.0, A_ptrs[i-1], n, B_ptrs[i-1], n)
+            CUBLAS.cublasDgemm_v2(CUBLAS.handle(), CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_OP_N,
+                n, n, n, -1.0, B_ptrs[i-1], n, B_ptrs[i-1], n, 1.0, A_ptrs[i], n)
+            CUSOLVER.cusolverDnDpotrf(dh, CUBLAS.CUBLAS_FILL_MODE_UPPER, n, A_ptrs[i], n,
+                buffer, sizeof(buffer) ÷ sizeof(T), dh.info)
+        end
 
-    for i = 2:N
-        CUBLAS.cublasDtrsm_v2('L', 'U', 'T', 'N', 1.0, A_list[i-1], B_list[i-1])
-        CUBLAS.cublasDgemm_v2('T', 'N', -1.0, B_list[i-1], B_list[i-1], 1.0, A_list[i])
-        CUSOLVER.cusolverDnDpotrf('U', A_list[i]) #TODO Allocation is here
     end
-
 end
 
-function cholesky_solve!(M_chol_A_list, M_chol_B_list, d_list::M, N) where {T, M<:AbstractVector{<:AbstractMatrix{T}}}
+function cholesky_solve!(A_ptrs::CuVector{<:CuPtr{T}}, B_ptrs::CuVector{<:CuPtr{T}}, d_ptrs::CuVector{<:CuPtr{T}}, N, n, nd) where {T<:Union{Float32,Float64}}
 
-    mytrsm!('L', 'U', 'T', 'N', 1.0, M_chol_A_list[1], d_list[1]);
+    CUBLAS.cublasDtrsm_v2(CUBLAS.handle(), CUBLAS.CUBLAS_SIDE_LEFT, CUBLAS.CUBLAS_FILL_MODE_UPPER,
+        CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_DIAG_NON_UNIT, n, nd, one(T), A_ptrs[1], n, d_ptrs[1], n)
 
     for i = 2:N
-        mygemm!('T', 'N', -1.0, M_chol_B_list[i-1], d_list[i-1], 1.0, d_list[i])
-        mytrsm!('L', 'U', 'T', 'N', 1.0, M_chol_A_list[i], d_list[i])
+        CUBLAS.cublasDgemm_v2(CUBLAS.handle(), CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_OP_N,
+            n, nd, n, -one(T), B_ptrs[i-1], n, d_ptrs[i-1], n, one(T), d_ptrs[i], n)
+        CUBLAS.cublasDtrsm_v2(CUBLAS.handle(), CUBLAS.CUBLAS_SIDE_LEFT, CUBLAS.CUBLAS_FILL_MODE_UPPER,
+            CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_DIAG_NON_UNIT, n, nd, one(T), A_ptrs[i], n, d_ptrs[i], n)
     end
 
-    mytrsm!('L', 'U', 'N', 'N', 1.0, M_chol_A_list[N], d_list[N])
+    CUBLAS.cublasDtrsm_v2(CUBLAS.handle(), CUBLAS.CUBLAS_SIDE_LEFT, CUBLAS.CUBLAS_FILL_MODE_UPPER,
+        CUBLAS.CUBLAS_OP_N, CUBLAS.CUBLAS_DIAG_NON_UNIT, n, nd, one(T), A_ptrs[N], n, d_ptrs[N], n)
 
     for i = N-1:-1:1
-        mygemm!('N', 'N', -1.0, M_chol_B_list[i], d_list[i+1], 1.0, d_list[i])
-        mytrsm!('L', 'U', 'N', 'N', 1.0, M_chol_A_list[i], d_list[i])
+        CUBLAS.cublasDgemm_v2(CUBLAS.handle(), CUBLAS.CUBLAS_OP_N, CUBLAS.CUBLAS_OP_N,
+            n, nd, n, -one(T), B_ptrs[i], n, d_ptrs[i+1], n, one(T), d_ptrs[i], n)
+        CUBLAS.cublasDtrsm_v2(CUBLAS.handle(), CUBLAS.CUBLAS_SIDE_LEFT, CUBLAS.CUBLAS_FILL_MODE_UPPER,
+            CUBLAS.CUBLAS_OP_N, CUBLAS.CUBLAS_DIAG_NON_UNIT, n, nd, one(T), A_ptrs[i], n, d_ptrs[i], n)
     end
 
 end
 
-function cholesky_factorize_batched!(A_ptrs::CuVector{<:CuPtr{T}}, B_ptrs::CuVector{<:CuPtr{T}}, P, m, n) where {T<:Union{Float32,Float64}}
+function cholesky_solve!(A_list, B_list, d_list::M, N) where {T, M<:AbstractVector{<:AbstractMatrix{T}}}
+
+    mytrsm!('L', 'U', 'T', 'N', 1.0, A_list[1], d_list[1]);
+
+    for i = 2:N
+        mygemm!('T', 'N', -1.0, B_list[i-1], d_list[i-1], 1.0, d_list[i])
+        mytrsm!('L', 'U', 'T', 'N', 1.0, A_list[i], d_list[i])
+    end
+
+    mytrsm!('L', 'U', 'N', 'N', 1.0, A_list[N], d_list[N])
+
+    for i = N-1:-1:1
+        mygemm!('N', 'N', -1.0, B_list[i], d_list[i+1], 1.0, d_list[i])
+        mytrsm!('L', 'U', 'N', 'N', 1.0, A_list[i], d_list[i])
+    end
+
+end
+
+function cholesky_factorize_batched!(A_ptrs::CuVector{<:CuPtr{T}}, B_ptrs::CuVector{<:CuPtr{T}}, bsz, sep, start, N, n) where {T<:Union{Float32,Float64}}
 
     # ---- one info buffer and one cuSOLVER handle ---------------------------
-    bsz     = length(A_ptrs[1:m:end])
-    info_array  = CUDA.zeros(Int32, bsz)
+    dh = CUSOLVER.dense_handle()
+    CUDA.resize!(dh.info, bsz)
 
     # ---- first block row ----------------------------------------------------
     CUSOLVER.cusolverDnDpotrfBatched(
-        CUSOLVER.dense_handle(), CUBLAS.CUBLAS_FILL_MODE_UPPER,
-        n, A_ptrs[1:m:end], n, pointer(info_array), bsz)
+        dh, CUBLAS.CUBLAS_FILL_MODE_UPPER,
+        n, A_ptrs[start:sep:end], n, dh.info, bsz)
     
     # ---- remaining block rows ----------------------------------------------
-    for i in 2:m-1
+    for i in (start+1):(start+N-1)
 
         CUBLAS.cublasDtrsmBatched(
             CUBLAS.handle(), CUBLAS.CUBLAS_SIDE_LEFT, CUBLAS.CUBLAS_FILL_MODE_UPPER,
             CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_DIAG_NON_UNIT,
-            n, n, one(T), A_ptrs[i-1:m:end], n, B_ptrs[(i-1):m:end], n, bsz)
+            n, n, one(T), A_ptrs[i-1:sep:end], n, B_ptrs[(i-1):sep:end], n, bsz)
 
         CUBLAS.cublasDgemmBatched(
             CUBLAS.handle(), CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_OP_N,
             n, n, n, -one(T),
-            B_ptrs[(i-1):m:end], n, B_ptrs[(i-1):m:end], n,
-            one(T), A_ptrs[i:m:end], n, bsz)
+            B_ptrs[(i-1):sep:end], n, B_ptrs[(i-1):sep:end], n,
+            one(T), A_ptrs[i:sep:end], n, bsz)
 
         CUSOLVER.cusolverDnDpotrfBatched(
-            CUSOLVER.dense_handle(), CUBLAS.CUBLAS_FILL_MODE_UPPER,
-            n, A_ptrs[i:m:end], n, pointer(info_array), bsz)
+            dh, CUBLAS.CUBLAS_FILL_MODE_UPPER,
+            n, A_ptrs[i:sep:end], n, dh.info, bsz)
 
     end
     
 end
 
-function cholesky_solve_batched!(A_ptrs::CuVector{<:CuPtr{T}}, B_ptrs::CuVector{<:CuPtr{T}}, d_ptrs::CuVector{<:CuPtr{T}}, P, m, n) where {T<:Union{Float32,Float64}}
+function cholesky_solve_batched!(A_ptrs::CuVector{<:CuPtr{T}}, B_ptrs::CuVector{<:CuPtr{T}}, d_ptrs::CuVector{<:CuPtr{T}}, P, m, n, nd) where {T<:Union{Float32,Float64}}
 
-    bsz = length(A_ptrs[1:m:end])
-    nd  = size(d_ptrs[1], 2)
+    bsz = P - 1
 
     CUBLAS.cublasDtrsmBatched(
         CUBLAS.handle(), CUBLAS.CUBLAS_SIDE_LEFT, CUBLAS.CUBLAS_FILL_MODE_UPPER,
         CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_DIAG_NON_UNIT,
         n, nd, one(T), A_ptrs[1:m:end], n, d_ptrs[1:m:end], n, bsz)
-
 
     for i = 2:m-1
         CUBLAS.cublasDgemmBatched(
@@ -169,7 +198,7 @@ end
 
 function compute_schur_complement!(A_ptrs::CuVector{<:CuPtr{T}}, B_ptrs::CuVector{<:CuPtr{T}}, factor_ptrs::CuVector{<:CuPtr{T}}, I_separator, P, m, n) where {T<:Union{Float32,Float64}}
     
-    bsz = length(A_ptrs[2:m+1:end])
+    bsz = P - 1
 
     # Perform Cholesky factorization
     cholesky_factorize_batched!(A_ptrs[2:I_separator[P]], B_ptrs[2:I_separator[P]-1], P, m, n)
@@ -181,7 +210,7 @@ function compute_schur_complement!(A_ptrs::CuVector{<:CuPtr{T}}, B_ptrs::CuVecto
 
     # Solve using Cholesky factors
     # cholesky_solve_batched!(view(A_list, 2:I_separator[P-1]), view(B_list, 2:I_separator[P-1]), view(factor_list, 2:I_separator[P-1]), m+1)
-    cholesky_solve_batched!(A_ptrs[2:I_separator[P]], A_ptrs[2:I_separator[P]-1], factor_list[2:I_separator[P]], m+1)
+    cholesky_solve_batched!(A_ptrs[2:I_separator[P]], B_ptrs[2:I_separator[P]-1], factor_ptrs[2:I_separator[P]], P, m+1, n, 2*n)
 
     # last partition
     # cholesky_solve!(view(A_list, I_separator[P-1]+1:I_separator[P]), view(B_list, I_separator[P-1]+1:I_separator[P]-1), view(factor_list, I_separator[P-1]+1:I_separator[P]), I_separator[P]-I_separator[P-1]-1)
@@ -263,19 +292,19 @@ function update_boundary_solution!(temp_B_list::Vector{<:AbstractMatrix}, d_list
 
 end
 
-function update_boundary_solution!(temp_B_ptrs::CuVector{<:CuPtr{T}}, d_ptrs::CuVector{<:CuPtr{T}}, I_separator, P, m, n, nd) where {T<:Union{Float32,Float64}}
+function update_boundary_solution!(temp_B_ptrs::CuVector{<:CuPtr{T}}, d_ptrs::CuVector{<:CuPtr{T}}, I_separator, P, m, n) where {T<:Union{Float32,Float64}}
     
     bsz = P-1
     # gemm_batched!('T', 'N', -1.0, temp_B_list[1:2:end], d_list[I_separator[1:P-1]], 1.0, d_list[I_separator[1:P-1].+1])
     CUBLAS.cublasDgemmBatched(
         CUBLAS.handle(), CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_OP_N,
-        n, nd, n, -one(T),
+        n, 1, n, -one(T),
         temp_B_ptrs[1:2:end], n, d_ptrs[I_separator[1:P-1]], n,
         one(T), d_ptrs[I_separator[1:P-1].+1], n, bsz)
     # gemm_batched!('N', 'N', -1.0, temp_B_list[2:2:end], d_list[I_separator[2:P]], 1.0, d_list[I_separator[2:P].-1])
     CUBLAS.cublasDgemmBatched(
         CUBLAS.handle(), CUBLAS.CUBLAS_OP_N, CUBLAS.CUBLAS_OP_N,
-        n, nd, n, -one(T),
+        n, 1, n, -one(T),
         temp_B_ptrs[2:2:end], n, d_ptrs[I_separator[2:P]], n,
         one(T), d_ptrs[I_separator[2:P].-1], n, bsz)
 
@@ -290,8 +319,8 @@ function solve_non_separator_blocks!(A_list::Vector{<:AbstractMatrix}, B_list::V
 
 end
 
-function solve_non_separator_blocks!(A_ptrs::CuVector{<:CuPtr{T}}, B_ptrs::CuVector{<:CuPtr{T}}, d_ptrs::CuVector{<:CuPtr{T}}, I_separator, P, m, n) where {T<:Union{Float32,Float64}}
+function solve_non_separator_blocks!(A_ptrs::CuVector{<:CuPtr{T}}, B_ptrs::CuVector{<:CuPtr{T}}, d_ptrs::CuVector{<:CuPtr{T}}, P, m, n) where {T<:Union{Float32,Float64}}
 
-    cholesky_solve_batched!(A_ptrs[2:I_separator[P]], B_ptrs[2:I_separator[P]-1], d_ptrs[2:I_separator[P]], P, m+1, n)
+    cholesky_solve_batched!(A_ptrs[2:end], B_ptrs[2:end-1], d_ptrs[2:end], P, m+1, n)
 
 end

@@ -25,7 +25,7 @@ using CUDA
 # Export functions
 export _bss_norm
 export BlockTriDiagData, initialize, factorize!, solve!
-export copy_vector_of_arrays!
+export copy_vector_of_arrays!, add_vector_of_arrays!, set_zero!, update_boundary_solution!, compute_schur_rhs!, cholesky_factorize!, cholesky_solve!, solve_non_separator_blocks!, cholesky_solve_batched!, cholesky_factorize_batched!
 
 # Include files
 include("myBLAS.jl")

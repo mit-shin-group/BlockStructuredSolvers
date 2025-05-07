@@ -214,7 +214,8 @@ function factorize!(data::BlockTriDiagData)
 
     # Recursive factorization
     if isnothing(data.NextData)
-        cholesky_factorize!(LHS_A_list, LHS_B_list, P)
+        # cholesky_factorize!(LHS_A_list, LHS_B_list, P)
+        @CUDA.allowscalar cholesky_factorize!(LHS_A_ptrs, LHS_B_ptrs, P, n)
     else
         copy_vector_of_arrays!(data.NextData.A_list, LHS_A_list)
         copy_vector_of_arrays!(data.NextData.B_list, LHS_B_list)
@@ -236,11 +237,18 @@ function solve!(data::BlockTriDiagData, d_list::Vector{<:AbstractMatrix{T}}) whe
     temp_list = data.temp_list
     temp_B_list = data.temp_B_list
 
+    A_ptrs = CUBLAS.unsafe_batch(A_list)
+    B_ptrs = CUBLAS.unsafe_batch(B_list)
+    factor_ptrs = CUBLAS.unsafe_batch(factor_list)
+    temp_ptrs = CUBLAS.unsafe_batch(temp_list)
+    d_ptrs = CUBLAS.unsafe_batch(d_list)
+
     # cache d_I_separator for frequent use
     d_I_separator = view(d_list, I_separator)
 
     # Compute RHS from Schur complement
-    compute_schur_rhs!(factor_list, d_list, temp_list, I_separator, P, m, n)
+    # compute_schur_rhs!(factor_list, d_list, temp_list, I_separator, P, m, n)
+    compute_schur_rhs!(factor_ptrs, d_ptrs, temp_ptrs, P, m, n)
 
     for i = 1:P-1
         d_list[I_separator[i]] .+= view(temp_list[i], 1:n, :)
@@ -249,7 +257,8 @@ function solve!(data::BlockTriDiagData, d_list::Vector{<:AbstractMatrix{T}}) whe
 
     # Solve system
     if isnothing(data.NextData)
-        cholesky_solve!(LHS_A_list, LHS_B_list, d_I_separator, P)
+        # cholesky_solve!(LHS_A_list, LHS_B_list, d_I_separator, P)
+        @CUDA.allowscalar cholesky_factorize!(LHS_A_ptrs, LHS_B_ptrs, P, n)
     else
         copy_vector_of_arrays!(data.NextData.d_list, d_I_separator)
         solve!(data.NextData, data.NextData.d_list)
@@ -257,10 +266,12 @@ function solve!(data::BlockTriDiagData, d_list::Vector{<:AbstractMatrix{T}}) whe
     end
 
     # Update d after Schur solve
-    update_boundary_solution!(temp_B_list, d_list, I_separator, P)
+    # update_boundary_solution!(temp_B_list, d_list, I_separator, P)
+    update_boundary_solution!(temp_B_ptrs, d_ptrs, I_separator, P, m, n)
 
     # Solve for non-separators
-    solve_non_separator_blocks!(A_list, B_list, d_list, I_separator, P, m)
+    # solve_non_separator_blocks!(A_list, B_list, d_list, I_separator, P, m)
+    solve_non_separator_blocks!(A_ptrs, B_ptrs, d_ptrs, P, m, n)
 
     return nothing
 end
