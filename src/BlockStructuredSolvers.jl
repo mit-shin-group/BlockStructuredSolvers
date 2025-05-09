@@ -29,7 +29,9 @@ export initialize_seq, initialize_batched, factorize!, solve!
 
 # Include files
 include("myBLAS.jl")
+# include("backbone.jl")
 include("backbone_cuda.jl")
+# include("seq.jl")
 include("gpu_seq.jl")
 include("gpu_batched.jl")
 

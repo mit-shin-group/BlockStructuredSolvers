@@ -1,7 +1,9 @@
 struct BlockTriDiagData_batched{
     T, 
-    MT <: AbstractArray{T},
-    VMT <: Vector{MT}
+    MT2 <: CuArray{T, 2},
+    MT3 <: CuArray{T, 3},
+    VMT <: Vector{MT2},
+    VPtr <: CuVector{CuPtr{T}}
     }
 
     N::Int
@@ -9,60 +11,60 @@ struct BlockTriDiagData_batched{
     n::Int
     P::Int
 
-    A_vec::MT
-    A_tensor::MT
+    A_vec::MT2
+    A_tensor::MT3
     A_list::VMT
-    A_ptrs::CuVector{CuPtr{T}}
+    A_ptrs::VPtr
 
-    B_vec::MT
-    B_tensor::MT
+    B_vec::MT2
+    B_tensor::MT3
     B_list::VMT
-    B_ptrs::CuVector{CuPtr{T}}
+    B_ptrs::VPtr
 
-    d_vec::MT
-    d_tensor::MT
+    d_vec::MT2
+    d_tensor::MT3
     d_list::VMT
-    d_ptrs::CuVector{CuPtr{T}}
+    d_ptrs::VPtr
 
-    LHS_A_vec::MT
-    LHS_A_tensor::MT
+    LHS_A_vec::MT2
+    LHS_A_tensor::MT3
     LHS_A_list::VMT
-    LHS_A_ptrs::CuVector{CuPtr{T}}
+    LHS_A_ptrs::VPtr
 
-    LHS_B_vec::MT
-    LHS_B_tensor::MT
+    LHS_B_vec::MT2
+    LHS_B_tensor::MT3
     LHS_B_list::VMT
-    LHS_B_ptrs::CuVector{CuPtr{T}}
+    LHS_B_ptrs::VPtr
 
-    M_vec_1::MT
-    M_tensor_1::MT
+    M_vec_1::MT2
+    M_tensor_1::MT3
     M_list_1::VMT
-    M_ptrs_1::CuVector{CuPtr{T}}
+    M_ptrs_1::VPtr
 
-    M_vec_2::MT
-    M_tensor_2::MT  
+    M_vec_2::MT2
+    M_tensor_2::MT3  
     M_list_2::VMT
-    M_ptrs_2::CuVector{CuPtr{T}}
+    M_ptrs_2::VPtr
 
-    M_2n_vec::MT
-    M_2n_tensor::MT
+    M_2n_vec::MT2
+    M_2n_tensor::MT3
     M_2n_list::VMT
-    M_2n_ptrs::CuVector{CuPtr{T}}
+    M_2n_ptrs::VPtr
 
-    F_vec::MT
-    F_tensor::MT
+    F_vec::MT2
+    F_tensor::MT3
     F_list::VMT
-    F_ptrs::CuVector{CuPtr{T}}
+    F_ptrs::VPtr
 
-    G_vec::MT
-    G_tensor::MT
+    G_vec::MT2
+    G_tensor::MT3
     G_list::VMT
-    G_ptrs::CuVector{CuPtr{T}}
+    G_ptrs::VPtr
 
-    b_vec::MT
-    b_tensor::MT    
+    b_vec::MT2
+    b_tensor::MT3 
     b_list::VMT
-    b_ptrs::CuVector{CuPtr{T}}
+    b_ptrs::VPtr
 
     NextData::Union{BlockTriDiagData_batched, BlockTriDiagData_seq}
 
@@ -70,25 +72,23 @@ end
 
 function create_data(N::Int, m::Int, n::Int, P::Int, next_Data::Union{BlockTriDiagData_batched, BlockTriDiagData_seq}, T::Type{<:Real}=Float64)
 
-    MT = CuArray{T}
+    A_vec, A_tensor, A_list, A_ptrs = create_matrix_list(N, n, n, T)
+    B_vec, B_tensor, B_list, B_ptrs = create_matrix_list(N-1, n, n, T)
 
-    A_vec, A_tensor, A_list, A_ptrs = create_matrix_list(N, n, n, MT)
-    B_vec, B_tensor, B_list, B_ptrs = create_matrix_list(N-1, n, n, MT)
-
-    d_vec, d_tensor, d_list, d_ptrs = create_matrix_list(N, n, 1, MT)    
+    d_vec, d_tensor, d_list, d_ptrs = create_matrix_list(N, n, 1, T)    
     
-    LHS_A_vec, LHS_A_tensor, LHS_A_list, LHS_A_ptrs = create_matrix_list(P, n, n, MT)
-    LHS_B_vec, LHS_B_tensor, LHS_B_list, LHS_B_ptrs = create_matrix_list(P-1, n, n, MT)
+    LHS_A_vec, LHS_A_tensor, LHS_A_list, LHS_A_ptrs = create_matrix_list(P, n, n, T)
+    LHS_B_vec, LHS_B_tensor, LHS_B_list, LHS_B_ptrs = create_matrix_list(P-1, n, n, T)
 
-    M_vec_1, M_tensor_1, M_list_1, M_ptrs_1 = create_matrix_list(P-1, n, n, MT)
-    M_vec_2, M_tensor_2, M_list_2, M_ptrs_2 = create_matrix_list(P-1, n, n, MT)
+    M_vec_1, M_tensor_1, M_list_1, M_ptrs_1 = create_matrix_list(P-1, n, n, T)
+    M_vec_2, M_tensor_2, M_list_2, M_ptrs_2 = create_matrix_list(P-1, n, n, T)
 
-    M_2n_vec, M_2n_tensor, M_2n_list, M_2n_ptrs = create_matrix_list(P-1, 2*n, 2*n, MT)
+    M_2n_vec, M_2n_tensor, M_2n_list, M_2n_ptrs = create_matrix_list(P-1, 2*n, 2*n, T)
 
-    F_vec, F_tensor, F_list, F_ptrs = create_matrix_list(N, n, 2*n, MT)
-    G_vec, G_tensor, G_list, G_ptrs = create_matrix_list(N, n, 2*n, MT)
+    F_vec, F_tensor, F_list, F_ptrs = create_matrix_list(N, n, 2*n, T)
+    G_vec, G_tensor, G_list, G_ptrs = create_matrix_list(N, n, 2*n, T)
 
-    b_vec, b_tensor, b_list, b_ptrs = create_matrix_list(P-1, 2*n, 1, MT)
+    b_vec, b_tensor, b_list, b_ptrs = create_matrix_list(P-1, 2*n, 1, T)
 
     data = BlockTriDiagData_batched(
         N, m, n, P,
@@ -108,19 +108,6 @@ function create_data(N::Int, m::Int, n::Int, P::Int, next_Data::Union{BlockTriDi
 
     return data
 end
-
-# function compute_partition(N::Int)
-
-#     m = 4
-#     P = length(1:(m+1):N)
-
-#     N_list = [N]
-#     m_list = [m]
-#     P_list = [P]
-
-#     return N_list, m_list, P_list
-
-# end
 
 ############  core backwards‑builder (unchanged)  ############################
 function _build_sequence(start::Int)
@@ -176,18 +163,22 @@ function find_sequence_upper(N::Int)
 end
 
 
-function initialize_batched(N::Int, n::Int)
+function initialize_batched(N::Int, n::Int, T::Type{<:Real}=Float64)
 
     P_list, N_list, m_list = find_sequence_upper(N)
 
     N = P_list[1]
 
-    data = initialize_seq(N, n)
+    data = initialize_seq(N, n, T)
 
     for (N, m, P) in zip(N_list, m_list, P_list)
 
         data = create_data(N, m, n, P, data)
 
+    end
+
+    for i in N:data.N
+        data.A_tensor[:, :, i] .= CuArray{T, 2}(I, n, n);
     end
 
     return data
@@ -216,10 +207,12 @@ function factorize!(data::BlockTriDiagData_batched)
     F_ptrs = data.F_ptrs
     G_ptrs = data.G_ptrs
     M_2n_ptrs = data.M_2n_ptrs
-    LHS_A_ptrs = data.LHS_A_ptrs
-    LHS_B_ptrs = data.LHS_B_ptrs
 
     T = eltype(A_tensor)
+
+    fill!(data.LHS_A_vec, 0.0);
+    fill!(data.LHS_B_vec, 0.0);
+    fill!(data.M_2n_vec, 0.0);
 
     copyto!(M_tensor_1, view(B_tensor, :, :, 1:(m+1):(N-1)));
     copyto!(M_tensor_2, view(B_tensor, :, :, (m+1):(m+1):(N-1)));
@@ -261,8 +254,6 @@ function solve!(data::BlockTriDiagData_batched)
     d_ptrs = data.d_ptrs
     A_ptrs = data.A_ptrs
     B_ptrs = data.B_ptrs
-    LHS_A_ptrs = data.LHS_A_ptrs
-    LHS_B_ptrs = data.LHS_B_ptrs
 
     M_ptrs_1 = data.M_ptrs_1
     M_ptrs_2 = data.M_ptrs_2
@@ -270,6 +261,8 @@ function solve!(data::BlockTriDiagData_batched)
     b_tensor = data.b_tensor
 
     T = eltype(b_tensor)
+
+    fill!(data.b_vec, 0.0);
     
     for i = 2:m+1
         CUBLAS.cublasDgemmBatched(

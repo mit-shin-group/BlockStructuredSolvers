@@ -1,7 +1,7 @@
 struct BlockTriDiagData_seq{
     T, 
-    MT2 <: CuArray{T},
-    MT3 <: CuArray{T},
+    MT2 <: CuArray{T, 2},
+    MT3 <: CuArray{T, 3},
     VMT <: Vector{MT2},
     VPtr <: CuVector{CuPtr{T}}
     }
@@ -26,15 +26,15 @@ struct BlockTriDiagData_seq{
 
 end
 
-function create_matrix_list(N::Int, n1::Int, n2::Int, MT::Type{<:AbstractArray{T}}) where {T}
+function create_matrix_list(N::Int, n1::Int, n2::Int, T)
 
-    M_vec = MT(zeros(N*n1*n2, 1))
-    M_tensor = unsafe_wrap(MT, pointer(M_vec), (n1, n2, N); own=false)
-    M_list = Vector{MT}(undef, N);
+    M_vec = CuArray{T, 2}(zeros(N*n1*n2, 1))
+    M_tensor = unsafe_wrap(CuArray{T, 3}, pointer(M_vec), (n1, n2, N); own=false)
+    M_list = Vector{CuMatrix{T}}(undef, N);
     ptr = pointer(M_tensor)
 
     for i in 1:N
-        M_list[i] = unsafe_wrap(MT, ptr + n1*n2*(i-1)*sizeof(T), (n1, n2); own=false)
+        M_list[i] = unsafe_wrap(CuMatrix{T}, ptr + n1*n2*(i-1)*sizeof(T), (n1, n2); own=false)
     end
 
     M_ptrs = CUBLAS.unsafe_batch(M_list)
@@ -44,11 +44,9 @@ end
 
 function initialize_seq(N::Int, n::Int, T::Type{<:Real}=Float64)
 
-    MT = CuArray{T}
-
-    A_vec, A_tensor, A_list, A_ptrs = create_matrix_list(N, n, n, MT)
-    B_vec, B_tensor, B_list, B_ptrs = create_matrix_list(N-1, n, n, MT)
-    d_vec, d_tensor, d_list, d_ptrs = create_matrix_list(N, n, 1, MT)
+    A_vec, A_tensor, A_list, A_ptrs = create_matrix_list(N, n, n, T)
+    B_vec, B_tensor, B_list, B_ptrs = create_matrix_list(N-1, n, n, T)
+    d_vec, d_tensor, d_list, d_ptrs = create_matrix_list(N, n, 1, T)
 
     data = BlockTriDiagData_seq(
         N, n,
