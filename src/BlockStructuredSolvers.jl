@@ -24,13 +24,13 @@ using CUDA
 
 # Export functions
 export _bss_norm
-export BlockTriDiagData, initialize, factorize!, solve!
-export copy_vector_of_arrays!, add_vector_of_arrays!, set_zero!, update_boundary_solution!, compute_schur_rhs!, cholesky_factorize!, cholesky_solve!, solve_non_separator_blocks!, cholesky_solve_batched!, cholesky_factorize_batched!
+export BlockTriDiagData_seq, BlockTriDiagData_batched
+export initialize_seq, initialize_batched, factorize!, solve!
 
 # Include files
 include("myBLAS.jl")
-include("backbone.jl")
-include("block_cholesky_factor_solve.jl")
-include("sequential_cholesky_factor_solve.jl")
+include("backbone_cuda.jl")
+include("gpu_seq.jl")
+include("gpu_batched.jl")
 
 end
