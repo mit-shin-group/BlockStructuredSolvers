@@ -8,7 +8,6 @@ function run_test(N, n, T, solver_type)
     
     # Set up tensors based on solver type
     if solver_type == :batched
-       
         
         # Initialize the solver
         data = initialize_batched(N, n, T, M)
