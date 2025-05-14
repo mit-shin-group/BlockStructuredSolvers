@@ -1,26 +1,32 @@
-function cholesky_factorize!(A_ptrs::CuVector{<:CuPtr{T}}, B_ptrs::CuVector{<:CuPtr{T}}, N, n) where {T<:Union{Float32,Float64}}
+for (Xpotrf_buffer, Xpotrf, Xtrsm, Xgemm, T) in (
+    (:cusolverDnSpotrf_bufferSize, :cusolverDnSpotrf, :cublasStrsm_v2, :cublasSgemm_v2, :Float32),
+    (:cusolverDnDpotrf_bufferSize, :cusolverDnDpotrf, :cublasDtrsm_v2, :cublasDgemm_v2, :Float64),
+)
+@eval begin
+    function cholesky_factorize!(A_ptrs::CuVector{<:CuPtr{$T}}, B_ptrs::CuVector{<:CuPtr{$T}}, N, n)
 
-    #TODO move this out
-    dh = CUSOLVER.dense_handle()
+        #TODO move this out
+        dh = CUSOLVER.dense_handle()
 
-    function bufferSize()
-        out = Ref{Cint}(0)
-        CUSOLVER.cusolverDnDpotrf_bufferSize(dh, CUBLAS.CUBLAS_FILL_MODE_UPPER, n, zeros(T, n, n), n, out)
-        out[] * sizeof(T)
-    end
-
-    CUDA.with_workspace(dh.workspace_gpu, bufferSize) do buffer
-        CUSOLVER.cusolverDnDpotrf(dh, CUBLAS.CUBLAS_FILL_MODE_UPPER, n, A_ptrs[1], n,
-            buffer, sizeof(buffer) ÷ sizeof(T), dh.info)
-        for i = 2:N
-            CUBLAS.cublasDtrsm_v2(CUBLAS.handle(), CUBLAS.CUBLAS_SIDE_LEFT, CUBLAS.CUBLAS_FILL_MODE_UPPER,
-                CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_DIAG_NON_UNIT, n, n, 1.0, A_ptrs[i-1], n, B_ptrs[i-1], n)
-            CUBLAS.cublasDgemm_v2(CUBLAS.handle(), CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_OP_N,
-                n, n, n, -1.0, B_ptrs[i-1], n, B_ptrs[i-1], n, 1.0, A_ptrs[i], n)
-            CUSOLVER.cusolverDnDpotrf(dh, CUBLAS.CUBLAS_FILL_MODE_UPPER, n, A_ptrs[i], n,
-                buffer, sizeof(buffer) ÷ sizeof(T), dh.info)
+        function bufferSize()
+            out = Ref{Cint}(0)
+            CUSOLVER.$Xpotrf_buffer(dh, CUBLAS.CUBLAS_FILL_MODE_UPPER, n, zeros($T, n, n), n, out)
+            out[] * sizeof($T)
         end
 
+        CUDA.with_workspace(dh.workspace_gpu, bufferSize) do buffer
+            CUSOLVER.$Xpotrf(dh, CUBLAS.CUBLAS_FILL_MODE_UPPER, n, A_ptrs[1], n,
+                buffer, sizeof(buffer) ÷ sizeof($T), dh.info)
+            for i = 2:N
+                CUBLAS.$Xtrsm(CUBLAS.handle(), CUBLAS.CUBLAS_SIDE_LEFT, CUBLAS.CUBLAS_FILL_MODE_UPPER,
+                    CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_DIAG_NON_UNIT, n, n, 1.0, A_ptrs[i-1], n, B_ptrs[i-1], n)
+                CUBLAS.$Xgemm(CUBLAS.handle(), CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_OP_N,
+                    n, n, n, -1.0, B_ptrs[i-1], n, B_ptrs[i-1], n, 1.0, A_ptrs[i], n)
+                CUSOLVER.$Xpotrf(dh, CUBLAS.CUBLAS_FILL_MODE_UPPER, n, A_ptrs[i], n,
+                    buffer, sizeof(buffer) ÷ sizeof($T), dh.info)
+            end
+
+        end
     end
 end
 
