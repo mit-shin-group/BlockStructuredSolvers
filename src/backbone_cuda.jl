@@ -1,3 +1,5 @@
+using CUDA
+
 for (Xpotrf_buffer, Xpotrf, Xtrsm, Xgemm, T) in (
     (:cusolverDnSpotrf_bufferSize, :cusolverDnSpotrf, :cublasStrsm_v2, :cublasSgemm_v2, :Float32),
     (:cusolverDnDpotrf_bufferSize, :cusolverDnDpotrf, :cublasDtrsm_v2, :cublasDgemm_v2, :Float64),
@@ -10,7 +12,7 @@ for (Xpotrf_buffer, Xpotrf, Xtrsm, Xgemm, T) in (
 
             function bufferSize()
                 out = Ref{Cint}(0)
-                CUSOLVER.$Xpotrf_buffer(dh, CUBLAS.CUBLAS_FILL_MODE_UPPER, n, zeros($T, n, n), n, out)
+                CUSOLVER.$Xpotrf_buffer(dh, CUBLAS.CUBLAS_FILL_MODE_UPPER, n, CUDA.zeros($T, n, n), n, out)
                 out[] * sizeof($T)
             end
 

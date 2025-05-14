@@ -66,7 +66,7 @@ function factorize!(data::BlockTriDiagData_seq)
     A_ptrs = data.A_ptrs
     B_ptrs = data.B_ptrs
 
-    CUDA.@allowscalar cholesky_factorize!(A_ptrs, B_ptrs, N, n) #TODO
+    @allowscalar cholesky_factorize!(A_ptrs, B_ptrs, N, n) #TODO
 
 end
 
@@ -79,6 +79,6 @@ function solve!(data::BlockTriDiagData_seq)
     B_ptrs = data.B_ptrs
     d_ptrs = data.d_ptrs
 
-    CUDA.@allowscalar cholesky_solve!(A_ptrs, B_ptrs, d_ptrs, N, n, 1) #TODO
+    @allowscalar cholesky_solve!(A_ptrs, B_ptrs, d_ptrs, N, n, 1) #TODO
 
 end
