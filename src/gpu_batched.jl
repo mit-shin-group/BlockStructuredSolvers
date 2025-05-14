@@ -167,9 +167,7 @@ function initialize_batched(N::Int, n::Int, T::Type{<:Real}=Float64)
 
     P_list, N_list, m_list = find_sequence_upper(N)
 
-    N = P_list[1]
-
-    data = initialize_seq(N, n, T)
+    data = initialize_seq(P_list[1], n, T)
 
     for (N, m, P) in zip(N_list, m_list, P_list)
 
