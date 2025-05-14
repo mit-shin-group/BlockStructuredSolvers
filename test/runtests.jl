@@ -2,8 +2,7 @@ using Test
 using Random
 using BlockStructuredSolvers
 using SparseArrays
-
-import LinearAlgebra: I, norm
+using LinearAlgebra
 
 Random.seed!(42)
 

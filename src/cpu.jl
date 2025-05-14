@@ -8,7 +8,7 @@ struct BlockTriDiagData_cpu{T}
 
 end
 
-function initialize_cpu(N, n, T::Type{<:Real}=Float64)
+function initialize_cpu(N, n, ::Type{T}) where T
 
     A_list = [Array{T, 2}(zeros(n, n)) for i in 1:N]
     B_list = [Array{T, 2}(zeros(n, n)) for i in 1:N-1]
@@ -24,16 +24,14 @@ function initialize_cpu(N, n, T::Type{<:Real}=Float64)
 
 end
 
-function factorize!(
-    data::BlockTriDiagData_cpu
-)
+function factorize!(data::BlockTriDiagData_cpu)
 
-N = data.N
+    N = data.N
 
-A_list = data.A_list
-B_list = data.B_list
+    A_list = data.A_list
+    B_list = data.B_list
 
-cholesky_factorize!(A_list, B_list, N)
+    cholesky_factorize!(A_list, B_list, N)
 
 end
 
