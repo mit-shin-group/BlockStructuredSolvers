@@ -29,12 +29,12 @@ end
 function create_matrix_list(N::Int, n1::Int, n2::Int, ::Type{T}, ::Type{M}) where {T, M}
 
     M_vec = M{T, 2}(zeros(N*n1*n2, 1))
-    M_tensor = unsafe_wrap(M{T, 3}, pointer(M_vec), (n1, n2, N); own=false)
+    M_tensor = unsafe_wrap(M{T, 3}, pointer(M_vec), (n1, n2, N))
     M_list = Vector{M{T, 2}}(undef, N);
     ptr = pointer(M_tensor)
 
     for i in 1:N
-        M_list[i] = unsafe_wrap(M{T, 2}, ptr + n1*n2*(i-1)*sizeof(T), (n1, n2); own=false)
+        M_list[i] = unsafe_wrap(M{T, 2}, ptr + n1*n2*(i-1)*sizeof(T), (n1, n2))
     end
 
     M_ptrs = device_batch(M_list)
