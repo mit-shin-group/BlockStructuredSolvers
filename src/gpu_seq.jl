@@ -1,9 +1,9 @@
 struct BlockTriDiagData_seq{
     T, 
-    MT2 <: CuArray{T, 2},
-    MT3 <: CuArray{T, 3},
-    VMT <: Vector{MT2},
-    VPtr <: CuVector{CuPtr{T}}
+    MT2 <: AbstractArray{T, 2},
+    MT3, # <: CuArray{T, 3},
+    VMT, # <: Vector{MT2},
+    VPtr # <: CuVector{CuPtr{T}}
     }
 
     N::Int
@@ -26,27 +26,27 @@ struct BlockTriDiagData_seq{
 
 end
 
-function create_matrix_list(N::Int, n1::Int, n2::Int, T)
+function create_matrix_list(N::Int, n1::Int, n2::Int, ::Type{T}, ::Type{M}) where {T, M}
 
-    M_vec = CuArray{T, 2}(zeros(N*n1*n2, 1))
-    M_tensor = unsafe_wrap(CuArray{T, 3}, pointer(M_vec), (n1, n2, N); own=false)
-    M_list = Vector{CuMatrix{T}}(undef, N);
+    M_vec = M{T, 2}(zeros(N*n1*n2, 1)) #TODO
+    M_tensor = unsafe_wrap(M{T, 3}, pointer(M_vec), (n1, n2, N); own=false) #TODO
+    M_list = Vector{M{T, 2}}(undef, N);
     ptr = pointer(M_tensor)
 
     for i in 1:N
-        M_list[i] = unsafe_wrap(CuMatrix{T}, ptr + n1*n2*(i-1)*sizeof(T), (n1, n2); own=false)
+        M_list[i] = unsafe_wrap(M{T, 2}, ptr + n1*n2*(i-1)*sizeof(T), (n1, n2); own=false)
     end
 
-    M_ptrs = CUBLAS.unsafe_batch(M_list)
+    M_ptrs = CUBLAS.unsafe_batch(M_list) #TODO
 
     return M_vec, M_tensor, M_list, M_ptrs
 end
 
-function initialize_seq(N::Int, n::Int, T::Type{<:Real}=Float64)
+function initialize_seq(N::Int, n::Int, ::Type{T}, ::Type{M}) where {T, M}
 
-    A_vec, A_tensor, A_list, A_ptrs = create_matrix_list(N, n, n, T)
-    B_vec, B_tensor, B_list, B_ptrs = create_matrix_list(N-1, n, n, T)
-    d_vec, d_tensor, d_list, d_ptrs = create_matrix_list(N, n, 1, T)
+    A_vec, A_tensor, A_list, A_ptrs = create_matrix_list(N, n, n, T, M)
+    B_vec, B_tensor, B_list, B_ptrs = create_matrix_list(N-1, n, n, T, M)
+    d_vec, d_tensor, d_list, d_ptrs = create_matrix_list(N, n, 1, T, M)
 
     data = BlockTriDiagData_seq(
         N, n,
@@ -66,7 +66,7 @@ function factorize!(data::BlockTriDiagData_seq)
     A_ptrs = data.A_ptrs
     B_ptrs = data.B_ptrs
 
-    @CUDA.allowscalar cholesky_factorize!(A_ptrs, B_ptrs, N, n)
+    CUDA.@allowscalar cholesky_factorize!(A_ptrs, B_ptrs, N, n) #TODO
 
 end
 
@@ -79,6 +79,6 @@ function solve!(data::BlockTriDiagData_seq)
     B_ptrs = data.B_ptrs
     d_ptrs = data.d_ptrs
 
-    @CUDA.allowscalar cholesky_solve!(A_ptrs, B_ptrs, d_ptrs, N, n, 1)
+    CUDA.@allowscalar cholesky_solve!(A_ptrs, B_ptrs, d_ptrs, N, n, 1) #TODO
 
 end
