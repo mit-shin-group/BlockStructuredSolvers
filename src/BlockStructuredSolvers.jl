@@ -7,7 +7,7 @@ import LinearAlgebra.LAPACK: potrf! as lapotrf!
 import LinearAlgebra: norm as lanorm
 import LinearAlgebra: I
 
-# GPU BLAS/LAPACK operations #TODO move CUDA as weakdep
+# GPU BLAS/LAPACK operations
 import CUDA.CUBLAS: gemm! as cugemm!
 import CUDA.CUBLAS: trsm! as cutrsm!
 import CUDA.CUSOLVER: potrf! as cupotrf!
@@ -24,8 +24,8 @@ using CUDA
 
 # Export functions
 export _bss_norm
-export BlockTriDiagData_seq, BlockTriDiagData_batched
-export initialize_seq, initialize_batched, initialize_cpu, factorize!, solve!
+export BlockTriDiagData_cpu, BlockTriDiagData_seq, BlockTriDiagData_batched
+export initialize_cpu, initialize_seq, initialize_batched, factorize!, solve!
 
 # Include files
 include("myBLAS.jl")
