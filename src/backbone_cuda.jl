@@ -19,9 +19,9 @@ for (Xpotrf_buffer, Xpotrf, Xtrsm, Xgemm, T) in (
                     buffer, sizeof(buffer) ÷ sizeof($T), dh.info)
                 for i = 2:N
                     CUBLAS.$Xtrsm(CUBLAS.handle(), CUBLAS.CUBLAS_SIDE_LEFT, CUBLAS.CUBLAS_FILL_MODE_UPPER,
-                        CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_DIAG_NON_UNIT, n, n, 1.0, A_ptrs[i-1], n, B_ptrs[i-1], n)
+                        CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_DIAG_NON_UNIT, n, n, one($T), A_ptrs[i-1], n, B_ptrs[i-1], n)
                     CUBLAS.$Xgemm(CUBLAS.handle(), CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_OP_N,
-                        n, n, n, -1.0, B_ptrs[i-1], n, B_ptrs[i-1], n, 1.0, A_ptrs[i], n)
+                        n, n, n, -one($T), B_ptrs[i-1], n, B_ptrs[i-1], n, one($T), A_ptrs[i], n)
                     CUSOLVER.$Xpotrf(dh, CUBLAS.CUBLAS_FILL_MODE_UPPER, n, A_ptrs[i], n,
                         buffer, sizeof(buffer) ÷ sizeof($T), dh.info)
                 end
