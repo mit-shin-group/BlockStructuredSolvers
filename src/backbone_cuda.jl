@@ -1,4 +1,5 @@
 using CUDA
+using CUDA.CUSOLVER, CUDA.CUBLAS
 
 for (Xpotrf_buffer, Xpotrf, Xtrsm, Xgemm, T) in (
     (:cusolverDnSpotrf_bufferSize, :cusolverDnSpotrf, :cublasStrsm_v2, :cublasSgemm_v2, :Float32),
