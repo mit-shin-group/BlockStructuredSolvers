@@ -55,8 +55,8 @@ for (Xpotrf_buffer, Xpotrf, Xtrsm, Xgemm, T) in (
 end
 
 for (XpotrfBatched, XtrsmBatched, XgemmBatched, T) in (
-    (:cusolverDnSpotrfBatched, :cublasStrsmBatched, :cublasSgemmBatched, :Float32),
-    (:cusolverDnDpotrfBatched, :cublasDtrsmBatched, :cublasDgemmBatched, :Float64),
+    (:cusolverDnSpotrfBatched, :cublasStrsmBatched_64, :cublasSgemmBatched_64, :Float32),
+    (:cusolverDnDpotrfBatched, :cublasDtrsmBatched_64, :cublasDgemmBatched_64, :Float64),
 )
     @eval begin
         function cholesky_factorize_batched!(A_ptrs::CuVector{<:CuPtr{$T}}, B_ptrs::CuVector{<:CuPtr{$T}}, bsz, sep, start, N, n)
@@ -130,6 +130,49 @@ for (XpotrfBatched, XtrsmBatched, XgemmBatched, T) in (
                 CUBLAS.CUBLAS_OP_N, CUBLAS.CUBLAS_DIAG_NON_UNIT,
                 n, nd, one($T), A_ptrs[start:sep:end], n, d_ptrs[start:sep:end], n, bsz)    
 
+        end
+
+        function compute_schur_complement!(G_ptrs::CuVector{<:CuPtr{$T}}, F_ptrs::CuVector{<:CuPtr{$T}}, M_2n_ptrs::CuVector{<:CuPtr{$T}}, LHS_A_tensor::CuArray{<:$T, 3}, LHS_B_tensor::CuArray{<:$T, 3}, M_2n_tensor::CuArray{<:$T, 3}, P, m, n)
+
+            for j = 2:m+1
+                CUBLAS.$XgemmBatched(
+                    CUBLAS.handle(), CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_OP_N,
+                    2*n, 2*n, n, one($T),
+                    G_ptrs[j:(m+1):end], n, F_ptrs[j:(m+1):end], n,
+                    one($T), M_2n_ptrs, 2*n, P-1)
+            end
+        
+            view(LHS_A_tensor, :, :, 1:P-1) .-= view(M_2n_tensor, 1:n, 1:n, :);
+            view(LHS_A_tensor, :, :, 2:P) .-= view(M_2n_tensor, n+1:2*n, n+1:2*n, :);
+            LHS_B_tensor .-= view(M_2n_tensor, 1:n, n+1:2*n, :);
+        
+        end
+
+        function compute_schur_RHS!(F_ptrs::CuVector{<:CuPtr{$T}}, d_ptrs::CuVector{<:CuPtr{$T}}, b_ptrs::CuVector{<:CuPtr{$T}}, d_tensor::CuArray{<:$T, 3}, b_tensor::CuArray{<:$T, 3}, N, n, m, P)
+            
+            for i = 2:m+1
+                CUBLAS.$XgemmBatched(
+                    CUBLAS.handle(), CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_OP_N,
+                    2*n, 1, n, -one($T),
+                    F_ptrs[i:(m+1):end], n, d_ptrs[i:(m+1):end], n,
+                    one($T), b_ptrs, 2*n, P-1)
+            end
+            
+            view(d_tensor, :, :, 1:(m+1):N-1) .+= view(b_tensor, 1:n, :, :);
+            view(d_tensor, :, :, (m+2):(m+1):N) .+= view(b_tensor, n+1:2*n, :, :);
+        end
+
+        function update_boundary!(M_ptrs_1::CuVector{<:CuPtr{$T}}, M_ptrs_2::CuVector{<:CuPtr{$T}}, d_ptrs::CuVector{<:CuPtr{$T}}, P, n, m)
+            CUBLAS.$XgemmBatched(
+                CUBLAS.handle(), CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_OP_N,
+                n, 1, n, -one($T),
+                M_ptrs_1, n, d_ptrs[1:(m+1):end-1], n,
+                one($T), d_ptrs[2:(m+1):end], n, P-1)
+            CUBLAS.$XgemmBatched(
+                CUBLAS.handle(), CUBLAS.CUBLAS_OP_N, CUBLAS.CUBLAS_OP_N,
+                n, 1, n, -one($T),
+                M_ptrs_2, n, d_ptrs[(m+2):(m+1):end], n,
+                one($T), d_ptrs[(m+1):(m+1):end], n, P-1)
         end
 
     end
