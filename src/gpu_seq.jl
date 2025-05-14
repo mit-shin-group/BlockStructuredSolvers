@@ -28,8 +28,8 @@ end
 
 function create_matrix_list(N::Int, n1::Int, n2::Int, ::Type{T}, ::Type{M}) where {T, M}
 
-    M_vec = M{T, 2}(zeros(N*n1*n2, 1)) #TODO
-    M_tensor = unsafe_wrap(M{T, 3}, pointer(M_vec), (n1, n2, N); own=false) #TODO
+    M_vec = M{T, 2}(zeros(N*n1*n2, 1))
+    M_tensor = unsafe_wrap(M{T, 3}, pointer(M_vec), (n1, n2, N); own=false)
     M_list = Vector{M{T, 2}}(undef, N);
     ptr = pointer(M_tensor)
 
@@ -37,7 +37,7 @@ function create_matrix_list(N::Int, n1::Int, n2::Int, ::Type{T}, ::Type{M}) wher
         M_list[i] = unsafe_wrap(M{T, 2}, ptr + n1*n2*(i-1)*sizeof(T), (n1, n2); own=false)
     end
 
-    M_ptrs = CUBLAS.unsafe_batch(M_list) #TODO
+    M_ptrs = device_batch(M_list)
 
     return M_vec, M_tensor, M_list, M_ptrs
 end
@@ -66,7 +66,7 @@ function factorize!(data::BlockTriDiagData_seq)
     A_ptrs = data.A_ptrs
     B_ptrs = data.B_ptrs
 
-    @allowscalar cholesky_factorize!(A_ptrs, B_ptrs, N, n) #TODO
+    @allowscalar cholesky_factorize!(A_ptrs, B_ptrs, N, n) #TODO check if works for both CUDA and ROCm
 
 end
 
@@ -79,6 +79,6 @@ function solve!(data::BlockTriDiagData_seq)
     B_ptrs = data.B_ptrs
     d_ptrs = data.d_ptrs
 
-    @allowscalar cholesky_solve!(A_ptrs, B_ptrs, d_ptrs, N, n, 1) #TODO
+    @allowscalar cholesky_solve!(A_ptrs, B_ptrs, d_ptrs, N, n, 1) #TODO check if works for both CUDA and ROCm
 
 end

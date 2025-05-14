@@ -1,6 +1,11 @@
 using AMDGPU
 using AMDGPU.rocSOLVER, AMDGPU.rocBLAS
 
+function device_batch(batch::Array{T}) where T <: ROCArray
+    E = eltype(T)
+    ROCArray([convert(Ptr{E}, arr.buf[]) for arr in batch])
+end
+
 for (Xpotrf, Xtrsm, Xgemm, T) in (
     (:rocsolver_spotrf, :rocblas_strsm, :rocblas_sgemm, :Float32),
     (:rocsolver_dpotrf, :rocblas_dtrsm, :rocblas_dgemm, :Float64),
@@ -151,7 +156,7 @@ for (XpotrfBatched, XtrsmBatched, XgemmBatched, T) in (
         function update_boundary!(M_ptrs_1::ROCVector{<:Ptr{$T}}, M_ptrs_2::ROCVector{<:Ptr{$T}}, d_ptrs::ROCVector{<:Ptr{$T}}, P, n, m)
             
             dh = rocBLAS.handle()
-            
+
             rocBLAS.$XgemmBatched(
                 dh, rocBLAS.rocblas_operation_transpose, rocBLAS.rocblas_operation_none,
                 n, 1, n, -one($T),

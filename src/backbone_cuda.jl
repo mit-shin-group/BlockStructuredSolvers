@@ -1,6 +1,11 @@
 using CUDA
 using CUDA.CUSOLVER, CUDA.CUBLAS
 
+@inline function device_batch(batch::Vector{<:CuArray{T}}) where {T}
+    ptrs = pointer.(batch)
+    return CuArray(ptrs)
+end
+
 for (Xpotrf_buffer, Xpotrf, Xtrsm, Xgemm, T) in (
     (:cusolverDnSpotrf_bufferSize, :cusolverDnSpotrf, :cublasStrsm_v2, :cublasSgemm_v2, :Float32),
     (:cusolverDnDpotrf_bufferSize, :cusolverDnDpotrf, :cublasDtrsm_v2, :cublasDgemm_v2, :Float64),
