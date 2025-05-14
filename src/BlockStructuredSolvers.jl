@@ -1,37 +1,21 @@
 module BlockStructuredSolvers
 
-# CPU BLAS/LAPACK operations
-import LinearAlgebra.BLAS: gemm! as lagemm!
-import LinearAlgebra.BLAS: trsm! as latrsm!
-import LinearAlgebra.LAPACK: potrf! as lapotrf!
-import LinearAlgebra: norm as lanorm
+# Import
 import LinearAlgebra: I
-
-# GPU BLAS/LAPACK operations
-import CUDA.CUBLAS: gemm! as cugemm!
-import CUDA.CUBLAS: trsm! as cutrsm!
-import CUDA.CUSOLVER: potrf! as cupotrf!
-import CUDA: norm as cunorm
-
-# CUDA types
-import CUDA: StridedCuMatrix, CuMatrix, CuArray, zeros
-import CUDA.CUBLAS: gemm_batched!, trsm_batched!, cublasDgemmBatched
-import CUDA.CUSOLVER: potrfBatched!, unchecked_cusolverDnDpotrfBatched
-
-# SparseArrays
-import SparseArrays: SparseMatrixCSC
-using CUDA
+import CUDA: @allowscalar
+import AMDGPU: @allowscalar
 
 # Export functions
-export _bss_norm
 export BlockTriDiagData_cpu, BlockTriDiagData_seq, BlockTriDiagData_batched
-export initialize_cpu, initialize_seq, initialize_batched, factorize!, solve!
+export initialize_cpu, initialize_seq, initialize_batched
+export factorize!, solve!
 
-# Include files
-include("myBLAS.jl")
+# Include backbone files
 include("backbone_cpu.jl")
 include("backbone_cuda.jl")
 include("backbone_rocm.jl")
+
+# Include solver files
 include("cpu.jl")
 include("gpu_seq.jl")
 include("gpu_batched.jl")
