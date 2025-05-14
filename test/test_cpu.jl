@@ -1,8 +1,3 @@
-using Test
-using LinearAlgebra
-using Random
-using BlockStructuredSolvers
-
 function _bss_norm(x)
     s = 0.0
     for i in eachindex(x)

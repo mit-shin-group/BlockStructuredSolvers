@@ -1,7 +1,3 @@
-using Test
-using LinearAlgebra
-using Random
-using BlockStructuredSolvers
 using AMDGPU
 
 function run_test(N, n, T, solver_type)
@@ -126,7 +122,7 @@ end
 
 if AMDGPU.functional()
     @testset "ROCm -- Block structured solvers" begin
-        Random.seed!(42) # for reproducibility
+
         N = 50
         n = 32
 

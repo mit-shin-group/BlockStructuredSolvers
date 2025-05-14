@@ -1,32 +1,31 @@
-using Test
-using LinearAlgebra
-using Random
-using BlockStructuredSolvers
 using CUDA
 
 function run_test(N, n, T, solver_type)
+
+    M = CuArray
+
     println("Testing $(solver_type) solver with $(T) precision")
     
     # Set up tensors based on solver type
     if solver_type == :batched
-        MT = CuArray{T}
+       
         
         # Initialize the solver
-        data = initialize_batched(N, n, T)
+        data = initialize_batched(N, n, T, M)
         
         # Create test data
-        A_tensor = MT(zeros(n, n, N))
-        B_tensor = MT(zeros(n, n, N-1))
+        A_tensor = M{T, 3}(zeros(n, n, N))
+        B_tensor = M{T, 3}(zeros(n, n, N-1))
         
         # Generate positive definite A matrices and random B matrices
         CUDA.@allowscalar for i in 1:N
             temp = randn(T, n, n)
-            A_tensor[:, :, i] .= MT(temp * temp' + n * I)
+            A_tensor[:, :, i] .= M{T, 2}(temp * temp' + n * I)
         end
         
         CUDA.@allowscalar for i in 1:N-1
             temp = randn(T, n, n)
-            B_tensor[:, :, i] .= MT(temp)
+            B_tensor[:, :, i] .= M{T, 2}(temp)
         end
         
         # Copy data to solver
@@ -34,13 +33,13 @@ function run_test(N, n, T, solver_type)
         copyto!(data.B_tensor, B_tensor)
         
         # Create solution vector x and right-hand side d
-        x_list = Vector{MT}(undef, N)
+        x_list = Vector{M{T, 2}}(undef, N)
         for i in 1:N
-            x_list[i] = MT(rand(T, n, 1))
+            x_list[i] = M{T, 2}(rand(T, n, 1))
         end
         
         # Compute right-hand side d = Ax
-        d_tensor = MT(zeros(T, n, 1, N))
+        d_tensor = M{T, 3}(zeros(T, n, 1, N))
         d_tensor[:, :, 1] = A_tensor[:, :, 1] * x_list[1] + B_tensor[:, :, 1] * x_list[2]
         @views for i = 2:N-1
             d_tensor[:, :, i] = B_tensor[:, :, i-1]' * x_list[i-1] + A_tensor[:, :, i] * x_list[i] + B_tensor[:, :, i] * x_list[i+1]
@@ -51,24 +50,23 @@ function run_test(N, n, T, solver_type)
         copyto!(data.d_tensor, d_tensor)
         
     elseif solver_type == :sequential
-        MT = CuArray{T}
         
         # Initialize the solver
-        data = initialize_seq(N, n, T)
+        data = initialize_seq(N, n, T, M)
         
         # Create test data
-        A_tensor = MT(zeros(n, n, N))
-        B_tensor = MT(zeros(n, n, N-1))
+        A_tensor = M{T, 3}(zeros(n, n, N))
+        B_tensor = M{T, 3}(zeros(n, n, N-1))
         
         # Generate positive definite A matrices and random B matrices
         CUDA.@allowscalar for i in 1:N
             temp = randn(T, n, n)
-            A_tensor[:, :, i] .= MT(temp * temp' + n * I)
+            A_tensor[:, :, i] .= M{T, 2}(temp * temp' + n * I)
         end
         
         CUDA.@allowscalar for i in 1:N-1
             temp = randn(T, n, n)
-            B_tensor[:, :, i] .= MT(temp)
+            B_tensor[:, :, i] .= M{T, 2}(temp)
         end
         
         # Copy data to solver
@@ -76,13 +74,13 @@ function run_test(N, n, T, solver_type)
         copyto!(data.B_tensor, B_tensor)
         
         # Create solution vector x and right-hand side d
-        x_list = Vector{MT}(undef, N)
+        x_list = Vector{M{T, 2}}(undef, N)
         for i in 1:N
-            x_list[i] = MT(rand(T, n, 1))
+            x_list[i] = M{T, 2}(rand(T, n, 1))
         end
         
         # Compute right-hand side d = Ax
-        d_tensor = MT(zeros(T, n, 1, N))
+        d_tensor = M{T, 3}(zeros(T, n, 1, N))
         d_tensor[:, :, 1] = A_tensor[:, :, 1] * x_list[1] + B_tensor[:, :, 1] * x_list[2]
         @views for i = 2:N-1
             d_tensor[:, :, i] = B_tensor[:, :, i-1]' * x_list[i-1] + A_tensor[:, :, i] * x_list[i] + B_tensor[:, :, i] * x_list[i+1]
@@ -126,7 +124,7 @@ end
 
 if CUDA.functional()
     @testset "CUDA -- Block structured solvers" begin
-        Random.seed!(42) # for reproducibility
+
         N = 50
         n = 32
 
