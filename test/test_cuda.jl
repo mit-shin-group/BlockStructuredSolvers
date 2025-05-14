@@ -19,12 +19,12 @@ function run_test(N, n, T, solver_type)
         B_tensor = MT(zeros(n, n, N-1))
         
         # Generate positive definite A matrices and random B matrices
-        @CUDA.allowscalar for i in 1:N
+        CUDA.@allowscalar for i in 1:N
             temp = randn(T, n, n)
             A_tensor[:, :, i] .= MT(temp * temp' + n * I)
         end
         
-        @CUDA.allowscalar for i in 1:N-1
+        CUDA.@allowscalar for i in 1:N-1
             temp = randn(T, n, n)
             B_tensor[:, :, i] .= MT(temp)
         end
@@ -61,12 +61,12 @@ function run_test(N, n, T, solver_type)
         B_tensor = MT(zeros(n, n, N-1))
         
         # Generate positive definite A matrices and random B matrices
-        @CUDA.allowscalar for i in 1:N
+        CUDA.@allowscalar for i in 1:N
             temp = randn(T, n, n)
             A_tensor[:, :, i] .= MT(temp * temp' + n * I)
         end
         
-        @CUDA.allowscalar for i in 1:N-1
+        CUDA.@allowscalar for i in 1:N-1
             temp = randn(T, n, n)
             B_tensor[:, :, i] .= MT(temp)
         end
@@ -106,7 +106,7 @@ function run_test(N, n, T, solver_type)
     
     # Compute error
     error = 0.0
-    @CUDA.allowscalar for i in 1:N
+    CUDA.@allowscalar for i in 1:N
         error += norm(data.d_list[i] - x_list[i])^2
     end
     error = sqrt(error)
