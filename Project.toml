@@ -1,7 +1,7 @@
 name = "BlockStructuredSolvers"
 uuid = "e294871a-52ed-424c-aac5-512b15cb83b5"
 license = "MIT"
-authors = ["David Jin <jindavid@mit.edu>", "Sungho Shin <sushin@mit.edu>"]
+authors = ["David Jin <jindavid@mit.edu>", "Alexis Montoison", "Sungho Shin <sushin@mit.edu>"]
 version = "0.1.0"
 
 [deps]
