@@ -1,207 +1,226 @@
 # BlockStructuredSolvers.jl
 
-![CI](https://github.com/mit-shin-group/BlockStructuredSolvers/actions/workflows/ci.yml/badge.svg)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+A high-performance Julia package for solving block-structured linear systems with a focus on block tridiagonal matrices.
+
+[![Build Status](https://github.com/username/BlockStructuredSolvers.jl/workflows/CI/badge.svg)](https://github.com/username/BlockStructuredSolvers.jl/actions)
+[![Coverage](https://codecov.io/gh/username/BlockStructuredSolvers.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/username/BlockStructuredSolvers.jl)
 
 ## Overview
-`BlockStructuredSolvers.jl` is a Julia package for efficiently solving block tridiagonal systems using hierarchical nested dissection and Cholesky factorization. The package is specifically optimized for large-scale structured linear algebra problems in scientific computing and optimization.
+
+BlockStructuredSolvers.jl provides specialized solvers for block-structured linear systems with a focus on block tridiagonal matrices. It offers multiple backends for different hardware architectures:
+
+- CPU: Sequential solver for standard CPUs
+- CUDA: High-performance GPU solvers using NVIDIA CUDA
+- ROCm: GPU solvers for AMD GPUs using ROCm
+
+Each backend supports both single (Float32) and double (Float64) precision computations, allowing you to balance speed and accuracy based on your application needs.
 
 ## Features
-- **Hierarchical nested dissection** for block tridiagonal matrices
-- **Multi-level Cholesky factorization** with optimal separator selection
-- **CPU and GPU support** with optimized BLAS/LAPACK and CUDA operations
-- **Automatic matrix structure detection** for easy integration with sparse matrices
-- **Memory-efficient implementation** suitable for very large systems
+
+- **Multiple Backends**: CPU, CUDA (NVIDIA), and ROCm (AMD) support
+- **Precision Options**: Both Float32 and Float64 support
+- **Algorithm Variants**:
+  - Sequential solver: Traditional block tridiagonal algorithm
+  - Batched solver: Optimized for parallel execution on GPUs
+- **High Performance**: Optimized implementations for each backend
+- **Simple Interface**: Consistent API across all backends
 
 ## Installation
-To install the package, use Julia's package manager:
 
 ```julia
 using Pkg
 Pkg.add("BlockStructuredSolvers")
 ```
 
-For the development version:
-```julia
-Pkg.add(url="https://github.com/mit-shin-group/BlockStructuredSolvers.jl")
-```
+## Quick Start
 
-## Usage
-
-### Basic Usage
-```julia
-using BlockStructuredSolvers
-
-# Generate or prepare your block tridiagonal matrix
-# A_list: Vector of diagonal blocks
-# B_list: Vector of off-diagonal blocks
-
-# Initialize the solver data structure
-N = length(A_list)     # Number of diagonal blocks
-m = 16                 # Number of sub-blocks between separators
-n = size(A_list[1], 1) # Size of each block
-P = ceil(Int, sqrt(N)) # Number of separators (using √N rule)
-level = 2              # Number of hierarchical levels
-
-# Create the solver data structure
-data = initialize(N, m, n, P, A_list, B_list, level)
-
-# Factorize (can be reused for multiple right-hand sides)
-factorize!(data)
-
-# Solve the system Ax = b
-x = zeros(N * n)     # Solution vector
-solve!(data, b, x)   # b is the right-hand side vector
-```
-
-### Working with Sparse Matrices
-```julia
-using BlockStructuredSolvers
-using SparseArrays
-
-# Create or import your sparse matrix
-A_sparse = get_sparse_matrix()  # Your sparse matrix
-
-# Detect block structure
-N, n = detect_spaces_and_divide_csc(A_sparse)
-
-# Convert to block tridiagonal form
-A_list, B_list = construct_block_tridiagonal(A_sparse, N, n)
-
-# Use the square root rule for optimal separator selection
-P = ceil(Int, sqrt(N))
-m = max(1, round(Int, (N-P)/(P-1)))
-level = min(3, ceil(Int, log2(log2(N+1))))
-
-# Initialize and solve as in basic usage
-data = initialize(N, m, n, P, A_list, B_list, level)
-factorize!(data)
-solve!(data, b, x)
-```
-
-### GPU Acceleration
-The package automatically leverages GPU resources when CUDA arrays are provided:
+Here's a simple example of how to use BlockStructuredSolvers to solve a block tridiagonal system:
 
 ```julia
 using BlockStructuredSolvers
-using CUDA
+using LinearAlgebra
+using Random
 
-# Convert your data to GPU arrays
-A_list_gpu = [CuMatrix(A) for A in A_list]
-B_list_gpu = [CuMatrix(B) for B in B_list]
-b_gpu = CuVector(b)
+# Problem size
+N = 100  # Number of blocks
+n = 32   # Size of each block
 
-# The solver will use GPU-optimized operations
-data = initialize(N, m, n, P, A_list_gpu, B_list_gpu, level)
-factorize!(data)
-x_gpu = CUDA.zeros(N * n)
-solve!(data, b_gpu, x_gpu)
+# Choose precision
+T = Float64
 
-# Transfer results back to CPU if needed
-x = Array(x_gpu)
+# CPU solver
+function solve_on_cpu()
+    # Initialize the solver
+    data = initialize_cpu(N, n, T)
+    
+    # Create and set up matrices
+    A_tensor = Array{T, 3}(zeros(n, n, N))
+    B_tensor = Array{T, 3}(zeros(n, n, N-1))
+    
+    # Fill with your data (example: random positive definite matrices)
+    for i in 1:N
+        temp = randn(T, n, n)
+        A_tensor[:, :, i] = temp * temp' + n * I
+    end
+    
+    for i in 1:N-1
+        temp = randn(T, n, n)
+        B_tensor[:, :, i] = temp
+    end
+    
+    # Copy data to solver
+    for i in 1:N
+        copyto!(data.A_list[i], A_tensor[:, :, i])
+    end
+    
+    for i in 1:N-1
+        copyto!(data.B_list[i], B_tensor[:, :, i])
+    end
+    
+    # Create right-hand side
+    d_list = Vector{Matrix{T}}(undef, N)
+    for i in 1:N
+        d_list[i] = rand(T, n, 1)
+    end
+    
+    # Factorize
+    factorize!(data)
+    
+    # Solve
+    solve!(data, d_list)
+    
+    # Solution is now in d_list
+    return d_list
+end
+
+# GPU solver using CUDA
+function solve_on_gpu()
+    using CUDA
+    
+    # Initialize the batched solver
+    data = initialize_batched(N, n, T, CuArray)
+    
+    # Create and set up matrices
+    A_tensor = CuArray{T, 3}(zeros(n, n, N))
+    B_tensor = CuArray{T, 3}(zeros(n, n, N-1))
+    
+    # Fill with your data (example: random positive definite matrices)
+    CUDA.@allowscalar for i in 1:N
+        temp = randn(T, n, n)
+        A_tensor[:, :, i] .= CuArray{T, 2}(temp * temp' + n * I)
+    end
+    
+    CUDA.@allowscalar for i in 1:N-1
+        temp = randn(T, n, n)
+        B_tensor[:, :, i] .= CuArray{T, 2}(temp)
+    end
+    
+    # Copy data to solver
+    copyto!(data.A_tensor, A_tensor)
+    copyto!(data.B_tensor, B_tensor)
+    
+    # Create right-hand side
+    d_tensor = CuArray{T, 3}(zeros(T, n, 1, N))
+    CUDA.@allowscalar for i in 1:N
+        d_tensor[:, :, i] = CuArray{T, 2}(rand(T, n, 1))
+    end
+    
+    # Copy right-hand side to solver
+    copyto!(data.d_tensor, d_tensor)
+    
+    # Factorize
+    CUDA.@sync factorize!(data)
+    
+    # Solve
+    CUDA.@sync solve!(data)
+    
+    # Solution is now in data.d_list
+    return data.d_list
+end
 ```
-
-## Benchmarks
-
-### Performance Scaling
-
-The solver demonstrates excellent performance scaling across different problem sizes and configurations:
-
-| Problem Size (N) | Block Size (n) | Separators | Levels | CPU Time (ms) | GPU Time (ms) |
-|------------------|---------------|------------|--------|---------------|---------------|
-| 1024             | 16            | 32         | 2      | 45.2          | 12.7          |
-| 4096             | 16            | 64         | 2      | 183.4         | 38.2          |
-| 16384            | 16            | 128        | 3      | 742.1         | 124.5         |
-| 65536            | 16            | 256        | 3      | 3245.8        | 382.1         |
-
-### Separator Selection Strategy
-
-Optimal separator selection significantly impacts performance. Our benchmarks show:
-
-1. **Square Root Rule**: Using √N separators at each level provides near-optimal performance for most problems
-2. **Level-dependent sizing**: Deeper levels benefit from fewer separators
-
-For 2D grid problems with N=16384 blocks (n=16):
-
-| Level 1 Separators | Level 2 Separators | Level 3 Separators | Total Time (ms) |
-|--------------------|--------------------|--------------------|-----------------|
-| 128                | 11                 | 3                  | 124.5           |
-| 128                | 16                 | 4                  | 129.2           |
-| 96                 | 10                 | 3                  | 131.8           |
-| 256                | 16                 | 4                  | 142.3           |
-
-### Nested Dissection Performance
-
-Hierarchical nested dissection substantially improves performance compared to direct solvers:
-
-| Problem Size | Direct Solver (s) | 1-Level (s) | 2-Level (s) | 3-Level (s) |
-|--------------|-------------------|-------------|-------------|-------------|
-| 4096         | 2.34              | 0.42        | 0.18        | 0.19        |
-| 16384        | 38.71             | 5.23        | 0.74        | 0.39        |
-| 65536        | OOM               | 26.45       | 3.25        | 1.28        |
-
-*OOM = Out of Memory
-
-### CPU vs. GPU Performance
-
-The solver has been optimized for both CPU and GPU environments:
-
-![CPU vs GPU Performance](https://example.com/performance_chart.png)
-
-- **CPU optimization**: Best performance with moderately sized blocks (m=8-16)
-- **GPU optimization**: Shows best scaling with smaller blocks (m=4-8) and higher parallelism
-
-### Hardware-Specific Tuning
-
-For optimal performance, we recommend:
-
-- **CPU systems**: Set `m ≈ 16` and use 2-3 levels for problems with N > 10000
-- **GPU systems**: Set `m ≈ 8` and use 3-4 levels for problems with N > 10000
-- **Memory-constrained**: Lower level count reduces memory overhead at slight performance cost
 
 ## API Reference
 
-### Core Functions
+### CPU Solver
 
-#### `initialize(N, m, n, P, A_list, B_list, level) -> BlockTriDiagData`
-Creates and initializes a hierarchical block tridiagonal system.
-- `N`: Number of diagonal blocks
-- `m`: Number of sub-blocks between separators
-- `n`: Size of each block
-- `P`: Number of separators
-- `A_list`: Vector of diagonal blocks
-- `B_list`: Vector of off-diagonal blocks
-- `level`: Number of hierarchical levels
+```julia
+# Initialize a CPU solver
+data = initialize_cpu(N, n, T=Float64)
 
-#### `factorize!(data::BlockTriDiagData)`
-Performs hierarchical Cholesky factorization on the block tridiagonal system.
+# Factorize the matrix
+factorize!(data)
 
-#### `solve!(data::BlockTriDiagData, d_list, x)`
-Solves the factorized system with right-hand side `d_list` and stores the solution in `x`.
+# Solve the system
+solve!(data, d_list)
+```
 
-### Utility Functions
+### CUDA Solver
 
-#### `detect_spaces_and_divide_csc(csc_matrix::SparseMatrixCSC) -> (N, n)`
-Automatically detects block structure in a sparse matrix.
-- Returns `N` (number of blocks) and `n` (block size)
+```julia
+# Initialize a batched CUDA solver
+data = initialize_batched(N, n, T=Float64, M=CuArray)
 
-#### `construct_block_tridiagonal(sparse_matrix, N, n) -> (A_list, B_list)`
-Converts a sparse matrix into block tridiagonal form.
-- Returns vectors of diagonal blocks (`A_list`) and off-diagonal blocks (`B_list`)
+# Initialize a sequential CUDA solver
+data = initialize_seq(N, n, T=Float64, M=CuArray)
 
-## Performance Considerations
+# Factorize the matrix
+CUDA.@sync factorize!(data)
 
-- This package leverages **BLAS** and **LAPACK** for CPU operations and **CUBLAS** and **CUSOLVER** for GPU operations.
-- For optimal performance, use **contiguous arrays** when possible to avoid stride-checking issues.
-- The square root rule (√N separators at each level) generally provides a good starting point for tuning.
-- For extremely large problems, using 3+ levels with GPU acceleration provides optimal performance.
-- Memory usage scales with O(N) rather than O(N²), enabling solution of very large systems.
+# Solve the system
+CUDA.@sync solve!(data)
+```
+
+### ROCm Solver
+
+```julia
+# Initialize a batched ROCm solver
+data = initialize_batched(N, n, T=Float64, M=ROCArray)
+
+# Initialize a sequential ROCm solver
+data = initialize_seq(N, n, T=Float64, M=ROCArray)
+
+# Factorize the matrix
+AMDGPU.@sync factorize!(data)
+
+# Solve the system
+AMDGPU.@sync solve!(data)
+```
+
+## Performance
+
+BlockStructuredSolvers.jl is designed for high performance across different hardware architectures. Here are some key performance considerations:
+
+- **GPU vs CPU**: For large systems, GPU implementations can offer significant speedups over CPU implementations.
+- **Batched vs Sequential**: The batched solver is generally faster on GPUs for large problems.
+- **Float32 vs Float64**: Single precision (Float32) is approximately twice as fast as double precision (Float64) but offers less numerical accuracy.
+
+## Algorithm
+
+The package implements a block Cholesky factorization for block tridiagonal matrices. For a block tridiagonal matrix with diagonal blocks A_i and off-diagonal blocks B_i, the algorithm:
+
+1. Factorizes the diagonal blocks using Cholesky decomposition
+2. Updates the remaining blocks using forward and backward substitution
+3. Solves the system using the factorized blocks
+
+For the batched implementation, the algorithm is reorganized to maximize parallel execution on GPUs.
 
 ## Contributing
-Contributions are welcome! Feel free to submit issues or pull requests on GitHub.
+
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
-This package is licensed under the MIT License. See the LICENSE file for details.
 
-## Acknowledgments
-TODO
+This package is licensed under the MIT License - see the LICENSE file for details.
+
+## Citation
+
+If you use BlockStructuredSolvers.jl in your research, please cite:
+
+```
+@software{BlockStructuredSolvers,
+  author = {Author},
+  title = {BlockStructuredSolvers.jl: A High-Performance Julia Package for Solving Block-Structured Linear Systems},
+  year = {2023},
+  url = {https://github.com/username/BlockStructuredSolvers.jl}
+}
+```
