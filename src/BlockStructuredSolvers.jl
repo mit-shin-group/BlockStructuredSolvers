@@ -25,13 +25,13 @@ using CUDA
 # Export functions
 export _bss_norm
 export BlockTriDiagData_seq, BlockTriDiagData_batched
-export initialize_seq, initialize_batched, factorize!, solve!
+export initialize_seq, initialize_batched, initialize_cpu, factorize!, solve!
 
 # Include files
 include("myBLAS.jl")
-# include("backbone.jl")
+include("backbone_cpu.jl")
 include("backbone_cuda.jl")
-# include("seq.jl")
+include("cpu.jl")
 include("gpu_seq.jl")
 include("gpu_batched.jl")
 
