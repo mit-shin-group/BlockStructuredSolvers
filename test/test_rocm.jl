@@ -2,14 +2,14 @@ using Test
 using LinearAlgebra
 using Random
 using BlockStructuredSolvers
-using CUDA
+using AMDGPU
 
 function run_test(N, n, T, solver_type)
     println("Testing $(solver_type) solver with $(T) precision")
     
     # Set up tensors based on solver type
     if solver_type == :batched
-        MT = CuArray{T}
+        MT = ROCArray{T}
         
         # Initialize the solver
         data = initialize_batched(N, n, T)
@@ -19,12 +19,12 @@ function run_test(N, n, T, solver_type)
         B_tensor = MT(zeros(n, n, N-1))
         
         # Generate positive definite A matrices and random B matrices
-        CUDA.@allowscalar for i in 1:N
+        AMDGPU.@allowscalar for i in 1:N
             temp = randn(T, n, n)
             A_tensor[:, :, i] .= MT(temp * temp' + n * I)
         end
         
-        CUDA.@allowscalar for i in 1:N-1
+        AMDGPU.@allowscalar for i in 1:N-1
             temp = randn(T, n, n)
             B_tensor[:, :, i] .= MT(temp)
         end
@@ -51,7 +51,7 @@ function run_test(N, n, T, solver_type)
         copyto!(data.d_tensor, d_tensor)
         
     elseif solver_type == :sequential
-        MT = CuArray{T}
+        MT = ROCArray{T}
         
         # Initialize the solver
         data = initialize_seq(N, n, T)
@@ -61,12 +61,12 @@ function run_test(N, n, T, solver_type)
         B_tensor = MT(zeros(n, n, N-1))
         
         # Generate positive definite A matrices and random B matrices
-        CUDA.@allowscalar for i in 1:N
+        AMDGPU.@allowscalar for i in 1:N
             temp = randn(T, n, n)
             A_tensor[:, :, i] .= MT(temp * temp' + n * I)
         end
         
-        CUDA.@allowscalar for i in 1:N-1
+        AMDGPU.@allowscalar for i in 1:N-1
             temp = randn(T, n, n)
             B_tensor[:, :, i] .= MT(temp)
         end
@@ -98,15 +98,15 @@ function run_test(N, n, T, solver_type)
     
     # Factorize
     println("  Factorization:")
-    CUDA.@sync factorize!(data)
+    AMDGPU.@sync factorize!(data)
     
     # Solve
     println("  Solve:")
-    CUDA.@sync solve!(data)
+    AMDGPU.@sync solve!(data)
     
     # Compute error
     error = 0.0
-    CUDA.@allowscalar for i in 1:N
+    AMDGPU.@allowscalar for i in 1:N
         error += norm(data.d_list[i] - x_list[i])^2
     end
     error = sqrt(error)
@@ -124,8 +124,8 @@ function run_test(N, n, T, solver_type)
     return error, rhs_norm
 end
 
-if CUDA.functional()
-    @testset "CUDA -- Block structured solvers" begin
+if AMDGPU.functional()
+    @testset "ROCm -- Block structured solvers" begin
         Random.seed!(42) # for reproducibility
         N = 50
         n = 32

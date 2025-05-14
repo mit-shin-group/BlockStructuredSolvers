@@ -31,6 +31,7 @@ export initialize_seq, initialize_batched, initialize_cpu, factorize!, solve!
 include("myBLAS.jl")
 include("backbone_cpu.jl")
 include("backbone_cuda.jl")
+include("backbone_rocm.jl")
 include("cpu.jl")
 include("gpu_seq.jl")
 include("gpu_batched.jl")
