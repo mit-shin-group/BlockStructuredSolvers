@@ -76,7 +76,7 @@ for (XpotrfBatched, XtrsmBatched, XgemmBatched, T) in (
                 CUBLAS.$XtrsmBatched(
                     CUBLAS.handle(), CUBLAS.CUBLAS_SIDE_LEFT, CUBLAS.CUBLAS_FILL_MODE_UPPER,
                     CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_DIAG_NON_UNIT,
-                    n, n, one($T), A_ptrs[i-1:sep:end], n, B_ptrs[(i-1):sep:end], n, bsz)
+                    n, n, one($T), A_ptrs[i-1:sep:end], n, B_ptrs[(i-1):sep:end], n, bsz) #TODO check : or use view or unsafe_wrap
 
                 CUBLAS.$XgemmBatched(
                     CUBLAS.handle(), CUBLAS.CUBLAS_OP_T, CUBLAS.CUBLAS_OP_N,
