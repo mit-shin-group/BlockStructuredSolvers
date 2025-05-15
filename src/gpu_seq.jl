@@ -28,7 +28,7 @@ end
 
 function create_matrix_list(N::Int, n1::Int, n2::Int, ::Type{T}, ::Type{M}) where {T, M}
 
-    amd = M.body.body.body.name.name == :ROCArray ? true : false
+    amd = M <: ROCArray ? true : false
     M_vec = M{T, 2}(zeros(N*n1*n2, 1))
     if amd
         M_tensor = unsafe_wrap(M{T, 3}, pointer(M_vec), (n1, n2, N); lock=false)
