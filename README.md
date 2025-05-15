@@ -218,9 +218,9 @@ If you use BlockStructuredSolvers.jl in your research, please cite:
 
 ```
 @software{BlockStructuredSolvers,
-  author = {Author},
+  author = {David Jin, Alexis Montoison, and Sungho Shin},
   title = {BlockStructuredSolvers.jl: A High-Performance Julia Package for Solving Block-Structured Linear Systems},
-  year = {2023},
+  year = {2024},
   url = {https://github.com/username/BlockStructuredSolvers.jl}
 }
 ```
