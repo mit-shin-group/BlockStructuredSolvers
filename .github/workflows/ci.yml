@@ -38,16 +38,6 @@ jobs:
         run: |
           julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
 
-      - name: Check for CUDA availability
-        id: check-cuda
-        shell: bash
-        run: |
-          if command -v nvidia-smi &> /dev/null; then
-            echo "cuda=true" >> $GITHUB_OUTPUT
-          else
-            echo "cuda=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Run tests
         run: |
-          julia --project=. -e 'using Pkg; Pkg.test(; test_args=["cuda=${{ steps.check-cuda.outputs.cuda }}"])'
+          julia --project=. -e 'using Pkg; Pkg.test()'
