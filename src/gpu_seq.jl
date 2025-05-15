@@ -28,13 +28,22 @@ end
 
 function create_matrix_list(N::Int, n1::Int, n2::Int, ::Type{T}, ::Type{M}) where {T, M}
 
+    amd = M.body.body.body.name.name == :ROCArray ? true : false
     M_vec = M{T, 2}(zeros(N*n1*n2, 1))
-    M_tensor = unsafe_wrap(M{T, 3}, pointer(M_vec), (n1, n2, N))
+    if amd
+        M_tensor = unsafe_wrap(M{T, 3}, pointer(M_vec), (n1, n2, N); lock=false)
+    else
+        M_tensor = unsafe_wrap(M{T, 3}, pointer(M_vec), (n1, n2, N))
+    end
     M_list = Vector{M{T, 2}}(undef, N);
     ptr = pointer(M_tensor)
 
     for i in 1:N
-        M_list[i] = unsafe_wrap(M{T, 2}, ptr + n1*n2*(i-1)*sizeof(T), (n1, n2))
+        if amd
+            M_list[i] = unsafe_wrap(M{T, 2}, ptr + n1*n2*(i-1)*sizeof(T), (n1, n2), lock=false)
+        else
+            M_list[i] = unsafe_wrap(M{T, 2}, ptr + n1*n2*(i-1)*sizeof(T), (n1, n2))
+        end
     end
 
     M_ptrs = device_batch(M_list)
