@@ -21,7 +21,7 @@ for (Xpotrf, Xtrsm, Xgemm, T) in (
                                n, n, Ref(one($T)), A_ptrs[i-1], n, B_ptrs[i-1], n)
                 rocBLAS.$Xgemm(dh, rocBLAS.rocblas_operation_transpose, rocBLAS.rocblas_operation_none,
                                n, n, n, Ref(-one($T)), B_ptrs[i-1], n, B_ptrs[i-1], n, Ref(one($T)), A_ptrs[i], n)
-                rocBLAS.$Xpotrf(dh, rocBLAS.rocblas_fill_upper, n, A_ptrs[i], n, dinfo)
+                rocSOLVER.$Xpotrf(dh, rocBLAS.rocblas_fill_upper, n, A_ptrs[i], n, dinfo)
             end
         end
 

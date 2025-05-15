@@ -1,6 +1,6 @@
 using CUDA
 
-function run_test(N, n, T, solver_type)
+function run_test_cuda(N, n, T, solver_type)
 
     M = CuArray
 
@@ -129,7 +129,7 @@ if CUDA.functional()
 
         @testset "$T tests" for T in (Float32, Float64)
             @testset "$mode solver" for mode in (:batched, :sequential)
-                error, rhs_norm = run_test(N, n, T, mode)
+                error, rhs_norm = run_test_cuda(N, n, T, mode)
                 println("  Relative error: $(error/rhs_norm)")
             end
         end

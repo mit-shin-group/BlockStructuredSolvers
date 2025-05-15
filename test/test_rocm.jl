@@ -1,6 +1,6 @@
 using AMDGPU
 
-function run_test(N, n, T, solver_type)
+function run_test_rocm(N, n, T, solver_type)
     println("Testing $(solver_type) solver with $(T) precision")
     
     # Set up tensors based on solver type
@@ -128,7 +128,7 @@ if AMDGPU.functional()
 
         @testset "$T tests" for T in (Float32, Float64)
             @testset "$mode solver" for mode in (:batched, :sequential)
-                error, rhs_norm = run_test(N, n, T, mode)
+                error, rhs_norm = run_test_rocm(N, n, T, mode)
                 println("  Relative error: $(error/rhs_norm)")
             end
         end
