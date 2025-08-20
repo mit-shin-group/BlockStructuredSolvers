@@ -18,8 +18,8 @@ device!(1)
 
 println(LinearAlgebra.BLAS.get_config())
 
-N = 32
-n = 54 # size of each block
+N = 2048
+n = 256 # size of each block
 seed = 42 # random seed for reproducibility
 T = Float64
 
@@ -109,12 +109,12 @@ function run(N, n)
     CUDA.@sync solve!(data_sequential)
     
     # Benchmark our GPU batched algorithm
-    gpu_factorize_time = @elapsed CUDA.@sync factorize!(data_gpu)
-    gpu_solve_time = @elapsed CUDA.@sync solve!(data_gpu)
+    gpu_factorize_time = CUDA.@elapsed CUDA.@sync factorize!(data_gpu)
+    gpu_solve_time = CUDA.@elapsed CUDA.@sync solve!(data_gpu)
     
     # Benchmark our sequential GPU algorithm
-    sequential_factorize_time = @elapsed CUDA.@sync factorize!(data_sequential) 
-    sequential_solve_time = @elapsed CUDA.@sync solve!(data_sequential)
+    sequential_factorize_time = CUDA.@elapsed CUDA.@sync factorize!(data_sequential) 
+    sequential_solve_time = CUDA.@elapsed CUDA.@sync solve!(data_sequential)
     
     GC.gc()
     CUDA.reclaim()
