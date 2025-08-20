@@ -12,14 +12,14 @@ include("utils.jl")
 
 using Printf, ProgressBars, Statistics
 
-device!(1)
+device!(0)
 
 ######
 
 println(LinearAlgebra.BLAS.get_config())
 
 N = 2048
-n = 256 # size of each block
+n = 1024 # size of each block
 seed = 42 # random seed for reproducibility
 T = Float64
 
