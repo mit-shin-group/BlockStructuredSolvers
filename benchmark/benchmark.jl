@@ -18,8 +18,8 @@ device!(0)
 
 println(LinearAlgebra.BLAS.get_config())
 
-N = 2048
-n = 1024 # size of each block
+N = 1024
+n = 512 # size of each block
 seed = 42 # random seed for reproducibility
 T = Float64
 
@@ -63,6 +63,18 @@ function run(N, n)
     cudss_factor_time = CUDA.@elapsed CUDSS.cudss("factorization", solver, x_cudss, b_cudss)
     # cudss_factor_time += cudss_analysis_time
     cudss_solve_time = CUDA.@elapsed CUDSS.cudss("solve", solver, x_cudss, d_cudss)
+
+
+    x_cudss = nothing
+    d_cudss = nothing
+    b_cudss = nothing
+    BigMatrix_cudss = nothing
+    solver = nothing
+    config = nothing
+    data = nothing
+
+    GC.gc()
+    CUDA.reclaim()
     
     # Time CUDSS solve using events
     # x_cudss = deepcopy(d_cudss)
@@ -116,6 +128,11 @@ function run(N, n)
     sequential_factorize_time = CUDA.@elapsed CUDA.@sync factorize!(data_sequential) 
     sequential_solve_time = CUDA.@elapsed CUDA.@sync solve!(data_sequential)
     
+    data_gpu = nothing
+    data_sequential = nothing
+    A_tensor_gpu = nothing
+    B_tensor_gpu = nothing
+    d_tensor_gpu = nothing
     GC.gc()
     CUDA.reclaim()
 
