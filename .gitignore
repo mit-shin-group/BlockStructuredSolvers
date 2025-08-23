@@ -25,3 +25,11 @@ Manifest.toml
 
 # Profile data
 profiling_results/
+
+# benchmark results
+cpu_benchmark_results.txt
+gpu_benchmark_results.txt
+
+# juliaup and depot
+julia_depot/
+juliaup/
