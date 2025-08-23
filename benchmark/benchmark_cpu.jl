@@ -1,9 +1,8 @@
-using LinearAlgebra, SparseArrays, BlockArrays, SuiteSparse
+using LinearAlgebra, SparseArrays, SuiteSparse
 using Random
 using LDLFactorizations
 using HSL
 using MKL
-using BlockStructuredSolvers
 
 import Pkg
 include("utils.jl")
@@ -12,8 +11,6 @@ using Printf, ProgressBars, Statistics, Dates
 
 ######
 
-N = 128
-n = 128 # size of each block
 seed = 42 # random seed for reproducibility
 T = Float64
 
@@ -274,9 +271,12 @@ end
 
 # Example usage - modify these problem sizes as needed
 cpu_problem_sizes = [
-    (32, 32),
-    (64, 64),
-    (128, 128),
+    (1024, 1024),
+    (2048, 512), 
+    (4096, 256),
+    (8192, 128),
+    (16384, 64),
+    (32768, 32),
 ]
 
 # Run the CPU benchmark suite
