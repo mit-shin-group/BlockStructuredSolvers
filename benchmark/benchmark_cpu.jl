@@ -271,12 +271,12 @@ end
 
 # Example usage - modify these problem sizes as needed
 cpu_problem_sizes = [
-    (1024, 1024),
-    (2048, 512), 
-    (4096, 256),
-    (8192, 128),
-    (16384, 64),
-    (32768, 32),
+    (256, 1024),
+    (512, 512),
+    (1024, 256),
+    (2048, 128),
+    (4096, 64),
+    (8192, 32),
 ]
 
 # Run the CPU benchmark suite
