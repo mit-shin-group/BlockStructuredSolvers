@@ -10,7 +10,9 @@ include("utils.jl")
 
 using Printf, ProgressBars, Statistics, Dates
 
-device!(0)
+if CUDA.functional()
+    device!(0)
+end
 
 ######
 
@@ -21,7 +23,7 @@ T = Float64
 
 # Determine GPU backend
 if AMDGPU.functional()
-    M = ROCmArray
+    M = ROCArray
 else
     M = CuArray
 end
@@ -179,7 +181,11 @@ function run_gpu(N, n)
 
     # Generate data
     A_list, B_list, x_list, x, d_list = generate_data(N, n)
-    A_list_gpu, B_list_gpu, x_list_gpu, x_gpu, d_list_gpu = to_gpu(A_list, B_list, x_list, x, d_list)
+    if CUDA.functional()
+        A_list_gpu, B_list_gpu, x_list_gpu, x_gpu, d_list_gpu = to_nvidia_gpu(A_list, B_list, x_list, x, d_list)
+    else
+        A_list_gpu, B_list_gpu, x_list_gpu, x_gpu, d_list_gpu = to_amd_gpu(A_list, B_list, x_list, x, d_list)
+    end
     BigMatrix, d = construct_block_tridiagonal(A_list, B_list, d_list)
 
     # Storage for results
@@ -337,4 +343,4 @@ problem_sizes = [
 ]
 
 # Run the benchmark suite
-run_benchmark_suite(problem_sizes, 10, "gpu_benchmark_results.txt") 
+run_benchmark_suite(problem_sizes, 10, "gpu_benchmark_results.txt")
