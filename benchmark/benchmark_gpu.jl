@@ -116,19 +116,27 @@ function benchmark_cudss(BigMatrix, d, N, n, backend_type)
 end
 
 function benchmark_gpu_solver(solver_type, A_tensor_gpu, B_tensor_gpu, d_tensor_gpu, N, n, backend_type)
-    # Initialize solver (outside timing to avoid scoping issues)
+    # Measure initialization time properly by timing everything
+    start_time = time()
+    
     if solver_type == :batched
         data = initialize_batched(N, n, Float64, backend_type)
     else  # sequential
         data = initialize_seq(N, n, Float64, backend_type)
     end
     
-    # Measure initialization time
-    init_time = gpu_elapsed(backend_type) do
-        copyto!(data.A_tensor, A_tensor_gpu)
-        copyto!(data.B_tensor, B_tensor_gpu)
-        copyto!(data.d_tensor, d_tensor_gpu)
+    copyto!(data.A_tensor, A_tensor_gpu)
+    copyto!(data.B_tensor, B_tensor_gpu)
+    copyto!(data.d_tensor, d_tensor_gpu)
+    
+    # Synchronize to ensure all operations are complete
+    if backend_type == CuArray
+        CUDA.synchronize()
+    else
+        AMDGPU.synchronize()
     end
+    
+    init_time = time() - start_time
     
     # Factorization
     factor_time = gpu_elapsed(backend_type) do
@@ -317,12 +325,15 @@ end
 
 # Example usage - modify these problem sizes as needed
 problem_sizes = [
-    (1024, 1024),
-    (2048, 512), 
-    (4096, 256),
-    (8192, 128),
-    (16384, 64),
-    (32768, 32),
+    # (1024, 1024),
+    # (2048, 512), 
+    # (4096, 256),
+    # (8192, 128),
+    # (16384, 64),
+    # (32768, 32),
+    (32, 32),
+    (64, 64),
+    (128, 128),
 ]
 
 # Run the benchmark suite
