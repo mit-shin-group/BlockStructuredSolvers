@@ -317,9 +317,12 @@ end
 
 # Example usage - modify these problem sizes as needed
 problem_sizes = [
-    (64, 64),
-    (128, 128), 
-    (32, 32),
+    (1024, 1024),
+    (2048, 512), 
+    (4096, 256),
+    (8192, 128),
+    (16384, 64),
+    (32768, 32),
 ]
 
 # Run the benchmark suite
