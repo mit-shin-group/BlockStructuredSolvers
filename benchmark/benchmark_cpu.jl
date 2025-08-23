@@ -108,7 +108,7 @@ function compute_residual_cpu(solution, A_list, B_list, d_list, N)
     x_blocks = [solution[(i-1)*n+1:i*n] for i in 1:N]
     
     # Compute Ax using block structure
-    Ax_blocks = Vector{Vector{Float64}}(undef, N)
+    Ax_blocks = Vector{Vector{T}}(undef, N)
     Ax_blocks[1] = A_list[1] * x_blocks[1] + B_list[1] * x_blocks[2]
     for i = 2:N-1
         Ax_blocks[i] = B_list[i-1]' * x_blocks[i-1] + A_list[i] * x_blocks[i] + B_list[i] * x_blocks[i+1]
@@ -130,9 +130,9 @@ function run_cpu(N, n)
     BigMatrix, d = construct_block_tridiagonal(A_list, B_list, d_list)
 
     # Storage for results
-    solutions = Dict{String, Vector{Float64}}()
-    residuals = Dict{String, Float64}()
-    timing_results = Dict{String, Tuple{Float64, Float64, Float64}}()
+    solutions = Dict{String, Vector{T}}()
+    residuals = Dict{String, T}()
+    timing_results = Dict{String, Tuple{T, T, T}}()
 
     # Benchmark MA57
     ma57_result = benchmark_ma57(BigMatrix, d, N, n)
@@ -210,8 +210,8 @@ function run_cpu_benchmark_suite(problem_sizes, iterations=10, output_file="cpu_
             println(io, "-"^50)
             
             # Storage for this problem size
-            all_timing_results = Dict{String, Vector{Tuple{Float64, Float64, Float64}}}()
-            all_residuals = Dict{String, Vector{Float64}}()
+            all_timing_results = Dict{String, Vector{Tuple{T, T, T}}}()
+            all_residuals = Dict{String, Vector{T}}()
             
             println("  Running $iterations iterations...")
             for i = 1:iterations
@@ -220,14 +220,14 @@ function run_cpu_benchmark_suite(problem_sizes, iterations=10, output_file="cpu_
                 # Collect results
                 for (solver_name, timing) in timing_results
                     if !haskey(all_timing_results, solver_name)
-                        all_timing_results[solver_name] = Tuple{Float64, Float64, Float64}[]
+                        all_timing_results[solver_name] = Tuple{T, T, T}[]
                     end
                     push!(all_timing_results[solver_name], timing)
                 end
                 
                 for (solver_name, residual) in residuals
                     if !haskey(all_residuals, solver_name)
-                        all_residuals[solver_name] = Float64[]
+                        all_residuals[solver_name] = T[]
                     end
                     push!(all_residuals[solver_name], residual)
                 end
