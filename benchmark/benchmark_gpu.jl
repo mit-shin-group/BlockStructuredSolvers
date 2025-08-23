@@ -16,8 +16,6 @@ end
 
 ######
 
-N = 128
-n = 128 # size of each block
 seed = 42 # random seed for reproducibility
 T = Float64
 
@@ -122,9 +120,9 @@ function benchmark_gpu_solver(solver_type, A_tensor_gpu, B_tensor_gpu, d_tensor_
     start_time = time()
     
     if solver_type == :batched
-        data = initialize_batched(N, n, Float64, backend_type)
+        data = initialize_batched(N, n, T, backend_type)
     else  # sequential
-        data = initialize_seq(N, n, Float64, backend_type)
+        data = initialize_seq(N, n, T, backend_type)
     end
     
     copyto!(data.A_tensor, A_tensor_gpu)
@@ -162,7 +160,7 @@ function compute_residual(solution, A_list, B_list, d_list, N)
     x_blocks = [solution[(i-1)*n+1:i*n] for i in 1:N]
     
     # Compute Ax using block structure
-    Ax_blocks = Vector{Vector{Float64}}(undef, N)
+    Ax_blocks = Vector{Vector{T}}(undef, N)
     Ax_blocks[1] = A_list[1] * x_blocks[1] + B_list[1] * x_blocks[2]
     for i = 2:N-1
         Ax_blocks[i] = B_list[i-1]' * x_blocks[i-1] + A_list[i] * x_blocks[i] + B_list[i] * x_blocks[i+1]
@@ -189,14 +187,14 @@ function run_gpu(N, n)
     BigMatrix, d = construct_block_tridiagonal(A_list, B_list, d_list)
 
     # Storage for results
-    solutions = Dict{String, Vector{Float64}}()
-    residuals = Dict{String, Float64}()
-    timing_results = Dict{String, Tuple{Float64, Float64, Float64}}()
+    solutions = Dict{String, Vector{T}}()
+    residuals = Dict{String, T}()
+    timing_results = Dict{String, Tuple{T, T, T}}()
 
     # Create GPU tensors
-    A_tensor_gpu = M{Float64}(undef, n, n, N)
-    B_tensor_gpu = M{Float64}(undef, n, n, N-1)
-    d_tensor_gpu = M{Float64}(undef, n, 1, N)
+    A_tensor_gpu = M{T}(undef, n, n, N)
+    B_tensor_gpu = M{T}(undef, n, n, N-1)
+    d_tensor_gpu = M{T}(undef, n, 1, N)
     
     # Fill GPU tensors
     fill_gpu_tensors!(A_tensor_gpu, B_tensor_gpu, d_tensor_gpu, A_list_gpu, B_list_gpu, d_list_gpu, N, M)
@@ -270,8 +268,8 @@ function run_benchmark_suite(problem_sizes, iterations=10, output_file="gpu_benc
             println(io, "-"^50)
             
             # Storage for this problem size
-            all_timing_results = Dict{String, Vector{Tuple{Float64, Float64, Float64}}}()
-            all_residuals = Dict{String, Vector{Float64}}()
+            all_timing_results = Dict{String, Vector{Tuple{T, T, T}}}()
+            all_residuals = Dict{String, Vector{T}}()
             
             println("  Running $iterations iterations...")
             for i = 1:iterations
@@ -280,14 +278,14 @@ function run_benchmark_suite(problem_sizes, iterations=10, output_file="gpu_benc
                 # Collect results
                 for (solver_name, timing) in timing_results
                     if !haskey(all_timing_results, solver_name)
-                        all_timing_results[solver_name] = Tuple{Float64, Float64, Float64}[]
+                        all_timing_results[solver_name] = Tuple{T, T, T}[]
                     end
                     push!(all_timing_results[solver_name], timing)
                 end
                 
                 for (solver_name, residual) in residuals
                     if !haskey(all_residuals, solver_name)
-                        all_residuals[solver_name] = Float64[]
+                        all_residuals[solver_name] = T[]
                     end
                     push!(all_residuals[solver_name], residual)
                 end
@@ -331,12 +329,12 @@ end
 
 # Example usage - modify these problem sizes as needed
 problem_sizes = [
-    (1024, 1024),
-    (2048, 512), 
-    (4096, 256),
-    (8192, 128),
-    (16384, 64),
-    (32768, 32),
+    (256, 1024),
+    (512, 512),
+    (1024, 256),
+    (2048, 128),
+    (4096, 64),
+    (8192, 32),
 ]
 
 # Run the benchmark suite
