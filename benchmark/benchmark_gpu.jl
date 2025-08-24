@@ -85,9 +85,10 @@ function benchmark_cudss(BigMatrix, d, N, n, backend_type)
         config = CUDSS.CudssConfig()
         data = CUDSS.CudssData()
         solver = CUDSS.CudssSolver(BigMatrix_cudss, config, data)
-        d_cudss = CuArray(d)
-        x_cudss = CUDA.zeros(T, N*n, 1)
-        b_cudss = CUDA.zeros(T, N*n, 1)
+        T = eltype(BigMatrix)
+        d_cudss = CuVector{T}(vec(d))
+        x_cudss = CUDA.zeros(T, N*n)
+        b_cudss = CUDA.zeros(T, N*n)
         CUDSS.cudss("analysis", solver, x_cudss, b_cudss)
     end
     
