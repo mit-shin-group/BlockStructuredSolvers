@@ -35,22 +35,24 @@ end
 
 
 function to_nvidia_gpu(A_list, B_list, x_list, x, d_list)
+    T = eltype(A_list[1])
     # Convert CPU arrays to GPU arrays on NVIDIA GPUs
-    A_list_gpu = [CuArray(A) for A in A_list]
-    B_list_gpu = [CuArray(B) for B in B_list]
-    x_list_gpu = [CuArray(x) for x in x_list]
-    x_gpu = [CuArray(x) for x in x]
-    d_list_gpu = [CuArray(d) for d in d_list]
+    A_list_gpu = [CuArray{T}(A) for A in A_list]
+    B_list_gpu = [CuArray{T}(B) for B in B_list]
+    x_list_gpu = [CuArray{T}(x) for x in x_list]
+    x_gpu = [CuArray{T}(x) for x in x]
+    d_list_gpu = [CuArray{T}(d) for d in d_list]
     return A_list_gpu, B_list_gpu, x_list_gpu, x_gpu, d_list_gpu
 end
 
 function to_amd_gpu(A_list, B_list, x_list, x, d_list)
+    T = eltype(A_list[1])
     # Convert CPU arrays to GPU arrays on AMD GPUs
-    A_list_gpu = [ROCArray(A) for A in A_list]
-    B_list_gpu = [ROCArray(B) for B in B_list]
-    x_list_gpu = [ROCArray(x) for x in x_list]
-    x_gpu = [ROCArray(x) for x in x]
-    d_list_gpu = [ROCArray(d) for d in d_list]
+    A_list_gpu = [ROCArray{T}(A) for A in A_list]
+    B_list_gpu = [ROCArray{T}(B) for B in B_list]
+    x_list_gpu = [ROCArray{T}(x) for x in x_list]
+    x_gpu = [ROCArray{T}(x) for x in x]
+    d_list_gpu = [ROCArray{T}(d) for d in d_list]
     return A_list_gpu, B_list_gpu, x_list_gpu, x_gpu, d_list_gpu
 end
 
