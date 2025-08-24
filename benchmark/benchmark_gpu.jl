@@ -179,7 +179,7 @@ function run_gpu(N, n)
     Random.seed!(seed)
 
     # Generate data
-    A_list, B_list, x_list, x, d_list = generate_data(N, n)
+    A_list, B_list, x_list, x, d_list = generate_data(N, n, T)
     if CUDA.functional()
         A_list_gpu, B_list_gpu, x_list_gpu, x_gpu, d_list_gpu = to_nvidia_gpu(A_list, B_list, x_list, x, d_list)
     else
@@ -190,7 +190,7 @@ function run_gpu(N, n)
     # Storage for results
     solutions = Dict{String, Vector{T}}()
     residuals = Dict{String, T}()
-    timing_results = Dict{String, Tuple{T, T, T}}()
+    timing_results = Dict{String, Tuple{Float64, Float64, Float64}}()
 
     # Create GPU tensors
     A_tensor_gpu = M{T}(undef, n, n, N)
@@ -247,6 +247,8 @@ function run_benchmark_suite(problem_sizes, iterations=10, output_file="gpu_benc
     all_results = []
     
     # Single warmup at the beginning
+    println("T = $T")
+    println("M = $M")
     println("Running warmup...")
     _, _ = run_gpu(20, 32)
     println("Warmup completed.\n")
@@ -258,6 +260,7 @@ function run_benchmark_suite(problem_sizes, iterations=10, output_file="gpu_benc
         println(io, "NEW BENCHMARK RUN")
         println(io, "GPU Block Structured Solver Benchmark Results")
         println(io, "Generated: $(now())")
+        println(io, "Data Type: $T")
         println(io, "GPU Backend: $(M == CuArray ? "CUDA" : "ROCm")")
         println(io, "Iterations per problem size: $iterations")
         println(io, "="^80)

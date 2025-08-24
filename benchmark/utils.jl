@@ -2,28 +2,28 @@ using SparseArrays
 
 export construct_block_tridiagonal, generate_data, to_gpu
 
-function generate_data(N::Int, n::Int)
+function generate_data(N::Int, n::Int, T::Type)
     # Generate CPU matrices
-    A_list = Vector{Matrix{Float64}}(undef, N)
+    A_list = Vector{Matrix{T}}(undef, N)
     for i in 1:N
         temp = randn(n, n)
         A_list[i] = temp * temp' + n * I
     end
     
-    B_list = Vector{Matrix{Float64}}(undef, N-1)
+    B_list = Vector{Matrix{T}}(undef, N-1)
     for i in 1:N-1
         temp = randn(n, n)
         B_list[i] = temp
     end
     
-    x_list = Vector{Matrix{Float64}}(undef, N)
-    x = Vector{Matrix{Float64}}(undef, N)
+    x_list = Vector{Matrix{T}}(undef, N)
+    x = Vector{Matrix{T}}(undef, N)
     for i in 1:N
         x_list[i] = rand(n, 1)
         x[i] = zeros(n, 1)
     end
     
-    d_list = Vector{Matrix{Float64}}(undef, N)
+    d_list = Vector{Matrix{T}}(undef, N)
     d_list[1] = A_list[1] * x_list[1] + B_list[1] * x_list[2]
     @views for i = 2:N-1
         d_list[i] = B_list[i-1]' * x_list[i-1] + A_list[i] * x_list[i] + B_list[i] * x_list[i+1]
@@ -55,13 +55,15 @@ function to_amd_gpu(A_list, B_list, x_list, x, d_list)
 end
 
 function construct_block_tridiagonal(A_list, B_list, d_list)
+
+    T = eltype(A_list[1])
     N = length(A_list)
     n = size(A_list[1], 1)
     total_size = N * n  # Total dimension of the sparse matrix
 
     I = Int[]
     J = Int[]
-    V = Float64[]
+    V = T[]
 
     # Fill the sparse matrix
     for i in 1:N
@@ -99,58 +101,58 @@ function construct_block_tridiagonal(A_list, B_list, d_list)
 end
 
 
-function generate_tridiagonal_system(N::Int, n::Int)
+# function generate_tridiagonal_system(N::Int, n::Int)
 
-    A_L_list = zeros(n, n, N)
-    for i in 1:N
-        L = LowerTriangular(randn(Float64, n, n))
-        for i in 1:n
-            L[i, i] = abs(L[i, i]) + 1.0
-        end
-        A_L_list[:, :, i] = L
-    end
+#     A_L_list = zeros(n, n, N)
+#     for i in 1:N
+#         L = LowerTriangular(randn(Float64, n, n))
+#         for i in 1:n
+#             L[i, i] = abs(L[i, i]) + 1.0
+#         end
+#         A_L_list[:, :, i] = L
+#     end
 
-    B_L_list = zeros(n, n, N-1)
-    for i in 1:N-1
-        B_L_list[:, :, i] = randn(Float64, n, n)
-    end
+#     B_L_list = zeros(n, n, N-1)
+#     for i in 1:N-1
+#         B_L_list[:, :, i] = randn(Float64, n, n)
+#     end
 
-    A_list = zeros(n, n, N)
-    A_list[:, :, 1] = A_L_list[:, :, 1] * A_L_list[:, :, 1]'
-    for i in 2:N
-        A_list[:, :, i] = A_L_list[:, :, i] * A_L_list[:, :, i]' + B_L_list[:, :, i-1]' * B_L_list[:, :, i-1]
-    end
+#     A_list = zeros(n, n, N)
+#     A_list[:, :, 1] = A_L_list[:, :, 1] * A_L_list[:, :, 1]'
+#     for i in 2:N
+#         A_list[:, :, i] = A_L_list[:, :, i] * A_L_list[:, :, i]' + B_L_list[:, :, i-1]' * B_L_list[:, :, i-1]
+#     end
 
-    # Generate B_list (off-diagonal block matrices)
-    B_list = zeros(n, n, N-1)
-    for i in 1:N-1
-        B_list[:, :, i] = A_L_list[:, :, i] * B_L_list[:, :, i]'
-    end
+#     # Generate B_list (off-diagonal block matrices)
+#     B_list = zeros(n, n, N-1)
+#     for i in 1:N-1
+#         B_list[:, :, i] = A_L_list[:, :, i] * B_L_list[:, :, i]'
+#     end
 
-    # Generate x_true
-    x_true = rand(N, n)
+#     # Generate x_true
+#     x_true = rand(N, n)
 
-    # Compute d_list
-    d_list = zeros(N, n)
-    d_list[1, :] = A_list[:, :, 1] * x_true[1, :] + B_list[:, :, 1] * x_true[2, :]
+#     # Compute d_list
+#     d_list = zeros(N, n)
+#     d_list[1, :] = A_list[:, :, 1] * x_true[1, :] + B_list[:, :, 1] * x_true[2, :]
 
-    @views for i in 2:N-1
-        d_list[i, :] = B_list[:, :, i-1]' * x_true[i-1, :] + A_list[:, :, i] * x_true[i, :] + B_list[:, :, i] * x_true[i+1, :]
-    end
+#     @views for i in 2:N-1
+#         d_list[i, :] = B_list[:, :, i-1]' * x_true[i-1, :] + A_list[:, :, i] * x_true[i, :] + B_list[:, :, i] * x_true[i+1, :]
+#     end
 
-    d_list[N, :] = B_list[:, :, N-1]' * x_true[N-1, :] + A_list[:, :, N] * x_true[N, :]
+#     d_list[N, :] = B_list[:, :, N-1]' * x_true[N-1, :] + A_list[:, :, N] * x_true[N, :]
 
-    # Flatten d_list into a vector
-    d = zeros(N * n)
-    @views for i in 1:N
-        d[(i-1)*n+1:i*n] = d_list[i, :]
-    end
+#     # Flatten d_list into a vector
+#     d = zeros(N * n)
+#     @views for i in 1:N
+#         d[(i-1)*n+1:i*n] = d_list[i, :]
+#     end
 
-    # Reshape x_true to a vector
-    x_true = reshape(x_true', N*n)
+#     # Reshape x_true to a vector
+#     x_true = reshape(x_true', N*n)
 
-    # Construct the block tridiagonal matrix
-    BigMatrix = construct_block_tridiagonal(A_list, B_list)
+#     # Construct the block tridiagonal matrix
+#     BigMatrix = construct_block_tridiagonal(A_list, B_list)
 
-    return BigMatrix, d, x_true, A_list, B_list
-end
+#     return BigMatrix, d, x_true, A_list, B_list
+# end

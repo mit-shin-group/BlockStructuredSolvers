@@ -31,10 +31,8 @@ function benchmark_ma57(BigMatrix, d, N, n)
         factor_time = @elapsed ma57_factorize!(BigMatrix_57)
         
         # Solve
-        solve_time = @elapsed ma57_solve(BigMatrix_57, d_57)
-        
-        solution = d_57
-        
+        solve_time = @elapsed solution = ma57_solve(BigMatrix_57, d_57)
+                
         # Cleanup
         BigMatrix_57 = nothing
         d_57 = nothing
@@ -126,13 +124,13 @@ function run_cpu(N, n)
     Random.seed!(seed)
 
     # Generate data
-    A_list, B_list, x_list, x, d_list = generate_data(N, n)
+    A_list, B_list, x_list, x, d_list = generate_data(N, n, T)
     BigMatrix, d = construct_block_tridiagonal(A_list, B_list, d_list)
 
     # Storage for results
     solutions = Dict{String, Vector{T}}()
     residuals = Dict{String, T}()
-    timing_results = Dict{String, Tuple{T, T, T}}()
+    timing_results = Dict{String, Tuple{Float64, Float64, Float64}}()
 
     # Benchmark MA57
     ma57_result = benchmark_ma57(BigMatrix, d, N, n)
@@ -188,6 +186,7 @@ function run_cpu_benchmark_suite(problem_sizes, iterations=10, output_file="cpu_
     all_results = []
     
     # Single warmup at the beginning
+    println("T = $T")
     println("Running CPU warmup...")
     _, _ = run_cpu(20, 32)
     println("CPU warmup completed.\n")
@@ -199,6 +198,7 @@ function run_cpu_benchmark_suite(problem_sizes, iterations=10, output_file="cpu_
         println(io, "NEW CPU BENCHMARK RUN")
         println(io, "CPU Block Structured Solver Benchmark Results")
         println(io, "Generated: $(now())")
+        println(io, "Data Type: $T")
         println(io, "BLAS: $(LinearAlgebra.BLAS.get_config().loaded_libs[1].libname)")
         println(io, "Iterations per problem size: $iterations")
         println(io, "="^80)
