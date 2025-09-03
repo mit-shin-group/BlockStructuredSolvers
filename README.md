@@ -1,4 +1,4 @@
-# TBD-GPU benchmark guns
+# TBD-GPU benchmark runs
 
 ## Install dependencies
 
