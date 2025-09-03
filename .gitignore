@@ -27,8 +27,9 @@ Manifest.toml
 profiling_results/
 
 # benchmark results
-cpu_benchmark_results.txt
-gpu_benchmark_results.txt
+*.txt
+*.pdf
+*.jld2
 
 # juliaup and depot
 julia_depot/
