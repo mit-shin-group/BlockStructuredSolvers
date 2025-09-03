@@ -26,6 +26,21 @@ else
     M = CuArray
 end
 
+using JLD2   # lightweight, perfect for saving arrays & Dicts
+
+"""
+save_kf_plot_payload(path; t, X_true, X_hat, n_state, m_obs, N_timesteps, ρ, σq, σr,
+                     solver_times=nothing, residuals=nothing)
+
+Stores all info needed to plot x̂ vs x later without re-running.
+"""
+function save_kf_plot_payload(path::AbstractString; t, X_true, X_hat,
+                              n_state::Int, m_obs::Int, N_timesteps::Int,
+                              ρ::Float64, σq::Float64, σr::Float64,
+                              solver_times=nothing, residuals=nothing)
+    @save path t X_true X_hat n_state m_obs N_timesteps ρ σq σr solver_times residuals
+end
+
 # Helper functions for cleaner code
 function gpu_elapsed(f, backend_type)
     if backend_type == CuArray
@@ -60,153 +75,90 @@ function gpu_reclaim(backend_type)
     end
 end
 
-# --- Kalman Filter Problem Generation ---
-function generate_kalman_filter_problem(n_state, m_obs, N_timesteps, sparsity_G=1.0, sparsity_H=1.0)
-    """
-    Generate a Kalman Filter problem that results in a block tridiagonal system.
-    
-    Parameters:
-    - n_state: State dimension (n)
-    - m_obs: Observation dimension (m)
-    - N_timesteps: Number of time steps (N)
-    - sparsity_G: Sparsity level for state transition matrix G_k
-    - sparsity_H: Sparsity level for observation matrix H_k
-    
-    Returns:
-    - A: Block tridiagonal system matrix (SPD)
-    - b: Right-hand side vector
-    - block_structure: Information about the block structure
-    """
-    
-    # --- 1. Generate Random System Matrices ---
-    # State transition matrix G_k (n x n) - sparse
-    G_k_mat = sprandn(T, n_state, n_state, sparsity_G)
-    G_k_mat = G_k_mat + T(n_state)*I(n_state)  # Ensure numerical stability
-    
-    # Observation matrix H_k (m_obs x n_state) - sparse
-    H_k_mat = sprandn(T, m_obs, n_state, sparsity_H)
-    
-    # Process noise covariance Q_k (n_state x n_state) - diagonal
-    Q_k_mat = LinearAlgebra.diagm(0 => rand(T, n_state).^2 .+ T(0.1))
-    
-    # Observation noise covariance R_k (m_obs x m_obs) - diagonal
-    R_k_mat = LinearAlgebra.diagm(0 => rand(T, m_obs).^2 .+ T(0.1))
-    
-    # --- 2. Construct Block Matrices ---
-    total_state_dim = (N_timesteps + 1) * n_state
-    total_obs_dim = N_timesteps * m_obs
-    G_output_dim = N_timesteps * n_state
-    
-    # Inverse covariance matrices
-    R_k_inv = inv(R_k_mat)
-    Q_k_inv = inv(Q_k_mat)
-    
-    # Block diagonal R_inv_stacked
-    R_inv_stacked = zeros(T, total_obs_dim, total_obs_dim)
-    for k in 1:N_timesteps
-        row_start = (k-1)*m_obs + 1
-        row_end = k*m_obs
-        R_inv_stacked[row_start:row_end, row_start:row_end] = R_k_inv
+# ---------- simulate time-invariant LGSSM with y_k = H x_k ----------
+function simulate_lgssm(n::Int, m::Int, N::Int; ρ=0.98, σq=0.02, σr=0.10, rng=Random.default_rng())
+    F = ρ * begin
+        Q, _ = qr!(randn(rng, n, n)); M = Matrix(Q); det(M) < 0 && (M[:,1] .*= -1); M
     end
-    
-    # Block diagonal Q_inv_stacked
-    Q_inv_stacked = zeros(T, G_output_dim, G_output_dim)
-    for k in 1:N_timesteps
-        row_start = (k-1)*n_state + 1
-        row_end = k*n_state
-        Q_inv_stacked[row_start:row_end, row_start:row_end] = Q_k_inv
+    H = randn(rng, m, n) ./ sqrt(n)
+
+    U = begin
+        Q, _ = qr!(randn(rng, n, n)); M = Matrix(Q); det(M) < 0 && (M[:,1] .*= -1); M
     end
-    
-    # H_stacked (block diagonal observation matrix)
-    H_stacked = zeros(T, total_obs_dim, total_state_dim)
-    for k in 1:N_timesteps
-        row_start = (k-1)*m_obs + 1
-        row_end = k*m_obs
-        col_start = k*n_state + 1
-        col_end = (k+1)*n_state
-        H_stacked[row_start:row_end, col_start:col_end] = H_k_mat
+    λ = range(0.5, 1.5; length=n)
+    Qmat = (σq^2) * (U * Diagonal(collect(λ)) * U')
+    Robj = (σr^2) * I(m)
+    x0   = randn(rng, n)
+    P0   = I(n) * 1.0
+
+    X = zeros(eltype(Qmat), n, N+1)  # [x₀ x₁ … x_N]
+    Y = zeros(eltype(Qmat), m, N)    # [y₁ … y_N]
+    X[:,1] .= x0
+    for k in 1:N
+        X[:,k+1] .= F*X[:,k] + σq*randn(rng, n)          # x_{k} -> x_{k+1}
+        Y[:,k]   .= H*X[:,k+1] + σr*randn(rng, m)        # *** y_k observes x_k ***
     end
-    
-    # G_stacked (block bidiagonal state transition matrix)
-    G_stacked = zeros(T, G_output_dim, total_state_dim)
-    for k in 1:N_timesteps
-        row_start = (k-1)*n_state + 1
-        row_end = k*n_state
-        
-        # Diagonal I block (for x_k)
-        col_start_I = k*n_state + 1
-        col_end_I = (k+1)*n_state
-        G_stacked[row_start:row_end, col_start_I:col_end_I] = I(n_state)
-        
-        # Sub-diagonal -G_k block (for x_{k-1})
-        col_start_G = (k-1)*n_state + 1
-        col_end_G = k*n_state
-        G_stacked[row_start:row_end, col_start_G:col_end_G] = -G_k_mat
-    end
-    
-    # --- 3. Construct System Matrix and RHS ---
-    # System matrix A = H^T * R^{-1} * H + G^T * Q^{-1} * G
-    LHS_H_term = H_stacked' * R_inv_stacked * H_stacked
-    LHS_G_term = G_stacked' * Q_inv_stacked * G_stacked
-    A = LHS_H_term + LHS_G_term
-    
-    # Generate random observations and prior
-    z_stacked = randn(T, total_obs_dim)
-    x0_prior = randn(T, n_state)
-    zeta_adjusted = zeros(T, G_output_dim)
-    zeta_adjusted[1:n_state] = x0_prior
-    
-    # RHS vector b = H^T * R^{-1} * z + G^T * Q^{-1} * zeta
-    RHS_H_term = H_stacked' * R_inv_stacked * z_stacked
-    RHS_G_term = G_stacked' * Q_inv_stacked * zeta_adjusted
-    b = RHS_H_term + RHS_G_term
-    
-    block_structure = (
-        n_state = n_state,
-        m_obs = m_obs,
-        N_timesteps = N_timesteps,
-        total_state_dim = total_state_dim,
-        sparsity = count(!iszero, A) / length(A)
-    )
-    
-    return A, b, block_structure
+    return (; F, H, Q=Qmat, R=Robj, P0, x0, X, Y)
 end
 
-function convert_to_block_tridiagonal_structure(A, b, n_state, N_timesteps)
-    """
-    Convert the Kalman Filter system matrix to block tridiagonal structure
-    compatible with BlockStructuredSolvers.
-    """
-    N = N_timesteps + 1  # Number of blocks
-    n = n_state
-    
-    # Extract diagonal blocks (A_i)
-    A_list = Vector{Matrix{T}}(undef, N)
-    for i in 1:N
-        row_start = (i-1)*n + 1
-        row_end = i*n
-        A_list[i] = A[row_start:row_end, row_start:row_end]
+# ---------- build A_list, B_list, d_list directly (no huge dense products) ----------
+function build_kf_blocks(F::AbstractMatrix, H::AbstractMatrix,
+                         Q::AbstractMatrix, R, P0, x0::AbstractVector, Y::AbstractMatrix)
+    n, N = size(F,1), size(Y,2)
+
+    # Precompute inverse actions once
+    Qfac  = cholesky(Symmetric(Matrix(Q)))
+    Qinv  = Qfac \ I
+    QinvF = Qfac \ F
+
+    # R^{-1} pieces
+    HtRinvH, Rinv_y = if R isa UniformScaling
+        rscale = 1/float(R.λ)
+        (rscale * (H' * H), y -> rscale * y)
+    else
+        Rfac = cholesky(Symmetric(Matrix(R)))
+        (H' * (Rfac \ H), y -> (Rfac \ y))
     end
-    
-    # Extract off-diagonal blocks (B_i)
-    B_list = Vector{Matrix{T}}(undef, N-1)
-    for i in 1:N-1
-        row_start = (i-1)*n + 1
-        row_end = i*n
-        col_start = i*n + 1
-        col_end = (i+1)*n
-        B_list[i] = A[row_start:row_end, col_start:col_end]
+
+    # P0^{-1}
+    P0inv = P0 isa UniformScaling ? (1/float(P0.λ)) * I(n) :
+             (cholesky(Symmetric(Matrix(P0))) \ I)
+
+    FtQinvF = F' * QinvF
+    B_up    = -(QinvF)'   # A_{k,k+1} = -F'Q^{-1} = (-(Q^{-1}F))'
+
+    A_list = Vector{Matrix{eltype(F)}}(undef, N)
+    B_list = Vector{Matrix{eltype(F)}}(undef, N-1)
+    d_list = Vector{Matrix{eltype(F)}}(undef, N)
+
+    for k in 1:N
+        Akk = Matrix(HtRinvH)
+        if k == 1
+            Akk .+= P0inv .+ FtQinvF
+        elseif k == N
+            Akk .+= Qinv
+        else
+            Akk .+= Qinv .+ FtQinvF
+        end
+        A_list[k] = Symmetric(Akk) |> Matrix
+        if k <= N-1
+            B_list[k] = B_up
+        end
+        rhs_k = H' * Rinv_y(Y[:,k])
+        if k == 1
+            rhs_k .+= P0inv * x0
+        end
+        d_list[k] = reshape(rhs_k, n, 1)
     end
-    
-    # Convert RHS to block structure
-    d_list = Vector{Matrix{T}}(undef, N)
-    for i in 1:N
-        row_start = (i-1)*n + 1
-        row_end = i*n
-        d_list[i] = reshape(b[row_start:row_end], n, 1)
-    end
-    
     return A_list, B_list, d_list
+end
+
+# ---------- convenience: simulate + blocks in one call ----------
+function generate_kf_blocks_efficient(n_state::Int, m_obs::Int, N_timesteps::Int;
+                                      ρ=0.98, σq=0.02, σr=0.10, rng=Random.default_rng())
+    sim = simulate_lgssm(n_state, m_obs, N_timesteps; ρ=ρ, σq=σq, σr=σr, rng=rng)
+    A_list, B_list, d_list = build_kf_blocks(sim.F, sim.H, sim.Q, sim.R, sim.P0, sim.x0, sim.Y)
+    return (; A_list, B_list, d_list, sim...)
 end
 
 function benchmark_cudss_kf(BigMatrix, d, N, n, backend_type)
@@ -316,66 +268,91 @@ function compute_residual_kf(solution, A_matrix, b_vector)
     return norm(A_matrix * solution - b_vector, 2)
 end
 
-function run_kf_gpu(n_state, m_obs, N_timesteps)
-    # Set random seed for reproducibility
+function run_kf_gpu(n_state, m_obs, N_timesteps; save_path::Union{Nothing,String}=nothing)
     Random.seed!(seed)
-    
-    # Generate Kalman Filter problem
-    println("Generating Kalman Filter problem...")
-    A_full, b_full, block_info = generate_kalman_filter_problem(n_state, m_obs, N_timesteps)
-    
-    println("Problem info:")
-    println("  State dimension: $(block_info.n_state)")
-    println("  Observation dimension: $(block_info.m_obs)")
-    println("  Time steps: $(block_info.N_timesteps)")
-    println("  Total system size: $(block_info.total_state_dim)")
-    println("  Sparsity: $(round(block_info.sparsity * 100, digits=2))%")
-    
-    # Convert to block tridiagonal structure
-    A_list, B_list, d_list = convert_to_block_tridiagonal_structure(A_full, b_full, n_state, N_timesteps)
-    N = length(A_list)
-    n = n_state
-    
-    # Create GPU arrays
+
+    # --- FAST PATH: directly build blocks; no giant dense A ---
+    # (you currently hard-code ρ=0.98, σq=1.0, σr=5.0 here; we reuse them below)
+    ρ_used, σq_used, σr_used = 0.98, 0.2, 1.0
+    prob = generate_kf_blocks_efficient(n_state, m_obs, N_timesteps; ρ=ρ_used, σq=σq_used, σr=σr_used)
+    A_list, B_list, d_list = prob.A_list, prob.B_list, prob.d_list
+    N = length(A_list); n = n_state
+
+    # Assemble sparse big matrix + rhs from blocks (your utils)
+    BigMatrix, b_full = construct_block_tridiagonal(A_list, B_list, d_list)
+
+    # For info printing (keep structure you had)
+    block_info = (
+        n_state = n_state,
+        m_obs = m_obs,
+        N_timesteps = N_timesteps,
+        total_state_dim = N_timesteps * n_state,
+        sparsity = nnz(BigMatrix) / length(BigMatrix)
+    )
+
+    # Move blocks to GPU (unchanged)
     if CUDA.functional()
         A_list_gpu, B_list_gpu, _, _, d_list_gpu = to_nvidia_gpu(A_list, B_list, [], [], d_list)
     else
         A_list_gpu, B_list_gpu, _, _, d_list_gpu = to_amd_gpu(A_list, B_list, [], [], d_list)
     end
-    
-    # Storage for results
+
     solutions = Dict{String, Vector{T}}()
     residuals = Dict{String, T}()
     timing_results = Dict{String, Tuple{Float64, Float64, Float64}}()
-    
-    # Create GPU tensors
+
+    # Tensors for our solver (unchanged)
     A_tensor_gpu = M{T}(undef, n, n, N)
     B_tensor_gpu = M{T}(undef, n, n, N-1)
     d_tensor_gpu = M{T}(undef, n, 1, N)
-    
-    # Fill GPU tensors
-    fill_gpu_tensors_kf!(A_tensor_gpu, B_tensor_gpu, d_tensor_gpu, A_list_gpu, B_list_gpu, d_list_gpu, N, M)
-    
-    # Benchmark CUDSS (on full system)
-    println("Running CUDSS benchmark...")
-    cudss_result = benchmark_cudss_kf(sparse(A_full), b_full, N, n, M)
-    if cudss_result !== nothing
-        timing_results["CUDSS"], solutions["CUDSS"] = cudss_result
+    fill_gpu_tensors_kf!(A_tensor_gpu, B_tensor_gpu, d_tensor_gpu,
+                         A_list_gpu, B_list_gpu, d_list_gpu, N, M)
+
+    # === cuDSS on sparse BigMatrix ===
+    if CUDA.functional()
+        println("Running CUDSS benchmark...")
+        cudss_result = benchmark_cudss_kf(BigMatrix, b_full, N, n, CuArray)
+        if cudss_result !== nothing
+            timing_results["CUDSS"], solutions["CUDSS"] = cudss_result
+        end
     end
-    
-    # Benchmark GPU Block Structured Solver
+
+    # === Your batched solver ===
     println("Running GPU Block-Structured Solver benchmark...")
-    timing_results["GPU_Batched"], solutions["GPU_Batched"] = 
-        benchmark_gpu_solver_kf(:batched, A_tensor_gpu, B_tensor_gpu, d_tensor_gpu, N, n, M)
-    
-    # Compute residuals
-    for (solver_name, solution) in solutions
-        residuals[solver_name] = compute_residual_kf(solution, A_full, b_full)
+    t0 = time()
+    data = initialize_batched(N, n, T, M)
+    copyto!(data.A_tensor, A_tensor_gpu)
+    copyto!(data.B_tensor, B_tensor_gpu)
+    copyto!(data.d_tensor, d_tensor_gpu)
+    init_time = time() - t0
+
+    factor_time = gpu_elapsed(() -> gpu_sync(() -> factorize!(data), M), M)
+    solve_time  = gpu_elapsed(() -> gpu_sync(() -> solve!(data), M), M)
+
+    # Collect solution as full vector
+    solution_gpu = vcat([vec(Array(data.d_list[i])) for i in 1:N]...)
+    timing_results["GPU_Batched"] = (init_time, factor_time, solve_time)
+    solutions["GPU_Batched"] = solution_gpu
+
+    # Residuals (use BigMatrix/b_full for both solvers)
+    for (solver_name, x) in solutions
+        residuals[solver_name] = norm(BigMatrix * x - b_full)
     end
-    
-    # Cleanup
+
+    # -- optional save: everything needed for plotting x̂ vs x later --
+    if save_path !== nothing
+        t = collect(0:N)
+        X_true = prob.X            # x1..xN
+        X_hat  = reshape(solution_gpu, n, N)   # [x̂1 … x̂N]
+        save_kf_plot_payload(save_path;
+            t=t, X_true=X_true, X_hat=X_hat,
+            n_state=n_state, m_obs=m_obs, N_timesteps=N_timesteps,
+            ρ=ρ_used, σq=σq_used, σr=σr_used,
+            solver_times=timing_results, residuals=residuals)
+        @info "Saved KF payload for plotting" save_path
+    end
+
     gpu_reclaim(M)
-    
     return timing_results, residuals, block_info
 end
 
@@ -502,12 +479,11 @@ end
 # Example usage - Kalman Filter problem configurations
 # Each tuple is (n_state, m_obs, N_timesteps)
 kf_problem_configs = [
-    # (50, 2, 10),    # Small problem
-    # (100, 4, 8),    # Medium problem  
-    # (200, 3, 6),    # Large problem
-    # (256, 1024, 10),    # Very large problem
-    (32, 128, 100),    # Very large problem
+    (256, 1024, 100),    # Very large problem
 ]
 
 # Run the Kalman Filter benchmark suite
 run_kf_benchmark_suite(kf_problem_configs, 10, "kf_benchmark_results.txt")
+
+# Save the payload for plotting
+# run_kf_gpu(256, 1024, 100; save_path="kf_payload_256x1024x100.jld2")
